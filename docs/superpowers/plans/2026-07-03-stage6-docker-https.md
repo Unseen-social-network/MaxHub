@@ -254,8 +254,8 @@ git commit -m "feat(docker): добавить прод docker-compose (bot, post
 
 - [ ] **Step 2: Validate syntax**
 
-Run: `docker run --rm -v "$(pwd)/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
-Expected: `Valid configuration`
+Run: `docker run --rm -e DOMAIN=example.com -v "$(pwd)/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`
+Expected: `Valid configuration` (note: `DOMAIN` must be set, even to a dummy value — with `{$DOMAIN}` unresolved, Caddy misparses the empty site address and the whole file as global options instead of a site block)
 
 - [ ] **Step 3: Commit**
 
