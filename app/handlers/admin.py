@@ -94,9 +94,7 @@ async def handle_broadcast_text(
         CallbackButton(text="✅ Отправить", payload="broadcast:confirm"),
         CallbackButton(text="❌ Отменить", payload="broadcast:cancel"),
     )
-    preview = (
-        f"Превью рассылки:\n\n{text}\n\nАктивных получателей: {len(recipients)}"
-    )
+    preview = f"Превью рассылки:\n\n{text}\n\nАктивных получателей: {len(recipients)}"
     await limiter.send_message(
         chat_id=chat_id, text=preview, attachments=[keyboard.as_markup()]
     )
