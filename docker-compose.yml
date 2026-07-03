@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: maxhub
+      POSTGRES_PASSWORD: maxhub
+      POSTGRES_DB: maxhub
+    ports:
+      - "5432:5432"
+    volumes:
+      - maxhub_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maxhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  maxhub_pg_data:
