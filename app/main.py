@@ -9,6 +9,7 @@ from maxapi.webhook.fastapi import FastAPIMaxWebhook
 
 from app.config import get_settings
 from app.db.engine import get_sessionmaker
+from app.handlers.admin import admin_router
 from app.handlers.common import common_router
 from app.handlers.converter import converter_router
 from app.handlers.todo import todo_router
@@ -36,7 +37,11 @@ def build_dispatcher(bot: Bot) -> tuple[Dispatcher, RateLimitedBot]:
     limiter = RateLimitedBot(bot)
     dispatcher.register_outer_middleware(LimiterMiddleware(limiter))
     dispatcher.include_routers(
-        common_router, todo_router, word_of_day_router, converter_router
+        common_router,
+        todo_router,
+        word_of_day_router,
+        converter_router,
+        admin_router,
     )
     return dispatcher, limiter
 
