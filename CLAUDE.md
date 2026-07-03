@@ -111,4 +111,52 @@ docker compose up --build
 - Хендлеры тонкие: парсинг → сервис → ответ. Логика и БД — в `services/` и `db/repo/`.
 - Сообщения бота на русском языке.
 - Логи в stdout (JSON в проде), без файлов.
+
+# Стартовый промт для Claude Code
+
+Скопируй текст ниже в первое сообщение Claude Code в пустом репозитории (в котором уже лежит CLAUDE.md).
+
+---
+
+Создай с нуля production-ready бота **MaxHub** для мессенджера MAX по описанию в CLAUDE.md. Работай поэтапно, после каждого этапа проверяй, что проект запускается и тесты проходят.
+
+**Этап 1 — каркас проекта.**
+Инициализируй проект через `uv init` (Python 3.12). Зависимости: maxapi (extra fastapi), fastapi, uvicorn, sqlalchemy[asyncio]>=2.0, asyncpg, alembic, pydantic-settings, apscheduler, aiolimiter, pillow. Dev: ruff, pytest, pytest-asyncio. Создай структуру каталогов из CLAUDE.md, `app/config.py` на pydantic-settings (BOT_TOKEN, DOMAIN, WEBHOOK_PATH, PORT, MODE, ADMIN_IDS, DATABASE_URL, TZ, BROADCAST_ACTIVE_DAYS, APP_VERSION, GIT_SHA, BUILD_TIME), `.env.example`, `.gitignore`.
+
+**Этап 2 — база данных.**
+`app/db/engine.py` (async engine + async_sessionmaker), модели SQLAlchemy 2.x (Mapped/mapped_column) из раздела «Модели данных» CLAUDE.md: users, todos, word_subscriptions, broadcasts. Настрой Alembic с async env.py, сгенерируй начальную миграцию. Репозитории в `app/db/repo/`. Middleware диспетчера: на каждый апдейт — upsert пользователя (last_activity_at, is_dm для личных сообщений) и прокидывание сессии в хендлеры. Docker compose для разработки: postgres:16 + bot. Тесты репозиториев против реального Postgres.
+
+**Этап 3 — ядро бота и лимитер.**
+`app/rate_limit.py`: обёртка над Bot, через которую идут ВСЕ исходящие вызовы API. Глобальный лимит 30 req/s (aiolimiter) + 2 msg/s на каждый chat_id (ленивый словарь лимитеров с очисткой по TTL). Ретраи с экспоненциальным backoff на 429/сетевые ошибки. Unit-тесты: 5 сообщений в один чат — не быстрее ~2 сек; глобальный лимит соблюдается. `app/main.py`: Bot + Dispatcher; MODE=polling для разработки, MODE=webhook — FastAPI с эндпоинтом вебхука и `/healthz`. На старте бот синхронизирует своё имя «MaxHub» и описание через API-метод изменения информации о боте.
+
+**Этап 4 — фичи.**
+1. Совместный todo-лист на чат: `/todo add <текст>`, `/todo list`, `/todo done <n>`, `/todo del <n>`; нумерованный вывод с отметками, инлайн-кнопки done/del.
+2. «Слово дня»: `/word`, `/word sub`, `/word unsub`; APScheduler шлёт слово ежедневно в 09:00 (TZ из env) во все подписанные чаты строго через лимитер. Заполни `data/words.json` 30 словами (слово, определение, пример).
+3. Конвертер изображений: на присланное изображение — инлайн-кнопки форматов (png/jpg/webp/pdf), конвертация Pillow в `asyncio.to_thread`, лимит входного файла 20 МБ, понятные ошибки.
+4. `/start`, `/help` с описанием всех функций.
+
+**Этап 5 — админка.**
+1. `/v` — только для ADMIN_IDS: `версия: {APP_VERSION}, sha: {GIT_SHA}, собрано: {BUILD_TIME}`. Не-админам не отвечать.
+2. `/broadcast` — только для ADMIN_IDS, FSM-сценарий: бот просит текст рассылки → показывает превью и число активных получателей (users с is_dm=true, is_blocked=false, last_activity_at за последние BROADCAST_ACTIVE_DAYS дней) → инлайн-кнопки «✅ Отправить» / «❌ Отменить» → рассылка фоновой asyncio-задачей строго через лимитер, промежуточный прогресс админу каждые ~50 получателей → итоговый отчёт «отправлено X, не доставлено Y». Ошибки доставки (пользователь заблокировал бота) → is_blocked=true. Каждая рассылка пишется в таблицу broadcasts. Напиши тест сервиса рассылки (выборка активных, учёт заблокированных).
+
+**Этап 6 — Docker и HTTPS.**
+Multi-stage Dockerfile на образах `ghcr.io/astral-sh/uv`: build-args APP_VERSION/GIT_SHA/BUILD_TIME → env; non-root; entrypoint: `alembic upgrade head` → запуск приложения; healthcheck на `/healthz`. Прод `deploy/docker-compose.yml`: сервисы `bot` (образ `ghcr.io/<owner>/<repo>:${IMAGE_TAG}`, env из `.env`), `postgres:16` (volume, healthcheck; bot стартует после healthy), `caddy` (80/443, volume для сертификатов). `deploy/Caddyfile`: `{$DOMAIN}` → reverse_proxy bot — Caddy сам получает и продлевает сертификаты Let's Encrypt. После старта бот подписывает вебхук на `https://{DOMAIN}{WEBHOOK_PATH}`.
+
+**Этап 7 — CI/CD.**
+`.github/workflows/ci.yml`: на push и pull_request — uv sync, ruff check + format check, pytest (postgres как service-контейнер), docker build без пуша.
+`.github/workflows/deploy.yml`: триггер ТОЛЬКО `on: push: tags: ['v*']`. Шаги: checkout → docker build с build-args (APP_VERSION = `${{ github.ref_name }}`, GIT_SHA, BUILD_TIME) → push в GHCR с тегами `{tag}` и `latest` → деплой через appleboy/ssh-action (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`): на сервере `cd /opt/maxbot && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG={tag}/" .env && docker compose pull && docker compose up -d && docker image prune -f`.
+
+**Этап 8 — финал.**
+README.md на русском: функции, получение токена у MasterBot (имя MaxHub, описание из CLAUDE.md), настройка сервера (/opt/maxbot, .env с BOT_TOKEN/DOMAIN/ADMIN_IDS/POSTGRES_PASSWORD/IMAGE_TAG, DNS, порты 80/443), GitHub secrets, процесс релиза (`git tag v1.0.0 && git push --tags`), как сделать рассылку через /broadcast. Прогони ruff и pytest, проверь `docker compose up --build`. Осмысленные коммиты по этапам.
+
+Важно: сверяйся с актуальной документацией maxapi и MAX Bot API (https://dev.max.ru/docs-api) — не выдумывай сигнатуры методов; если не уверен в методе библиотеки, проверь исходники пакета в окружении.
+
+---
+
+## Перед запуском промта
+
+1. Создай пустой репозиторий на GitHub, положи в корень `CLAUDE.md`.
+2. Получи токен у MasterBot в MAX (имя: **MaxHub**, описание: «Совместные списки дел, "Слово дня" и конвертер файлов — всё в одном боте»).
+3. GitHub → Settings → Secrets and variables → Actions: `SSH_HOST`, `SSH_USER`, `SSH_KEY`.
+4. На сервере: Docker + compose plugin, каталог `/opt/maxbot` с `.env` (BOT_TOKEN, DOMAIN, ADMIN_IDS, POSTGRES_PASSWORD, IMAGE_TAG=latest), DNS A-запись домена на сервер, открыты порты 80/443.
 - Перед коммитом: ruff + pytest должны проходить.
