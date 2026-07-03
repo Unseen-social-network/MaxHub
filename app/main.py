@@ -8,7 +8,8 @@ from maxapi.webhook.fastapi import FastAPIMaxWebhook
 
 from app.config import get_settings
 from app.db.engine import get_sessionmaker
-from app.middlewares import ActivityMiddleware
+from app.middlewares import ActivityMiddleware, LimiterMiddleware
+from app.rate_limit import RateLimitedBot
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +24,10 @@ def build_bot() -> Bot:
     return Bot(token=get_settings().bot_token)
 
 
-def build_dispatcher() -> Dispatcher:
+def build_dispatcher(bot: Bot) -> Dispatcher:
     dispatcher = Dispatcher()
     dispatcher.register_outer_middleware(ActivityMiddleware(get_sessionmaker()))
+    dispatcher.register_outer_middleware(LimiterMiddleware(RateLimitedBot(bot)))
     return dispatcher
 
 
@@ -45,7 +47,7 @@ async def sync_bot_profile(bot: Bot) -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     bot = build_bot()
-    dispatcher = build_dispatcher()
+    dispatcher = build_dispatcher(bot)
     webhook = FastAPIMaxWebhook(dp=dispatcher, bot=bot)
 
     @asynccontextmanager
@@ -68,7 +70,7 @@ def create_app() -> FastAPI:
 
 async def run_polling() -> None:
     bot = build_bot()
-    dispatcher = build_dispatcher()
+    dispatcher = build_dispatcher(bot)
     await sync_bot_profile(bot)
     await dispatcher.start_polling(bot)
 

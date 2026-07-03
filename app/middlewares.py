@@ -6,6 +6,7 @@ from maxapi.types.updates import UpdateUnion
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.repo.users import UserRepo
+from app.rate_limit import RateLimitedBot
 
 
 def _is_dm_event(event_object: UpdateUnion) -> bool:
@@ -38,3 +39,17 @@ class ActivityMiddleware(BaseMiddleware):
 
             data["session"] = session
             return await handler(event_object, data)
+
+
+class LimiterMiddleware(BaseMiddleware):
+    def __init__(self, limiter: RateLimitedBot) -> None:
+        self._limiter = limiter
+
+    async def __call__(
+        self,
+        handler: HandlerCallable,
+        event_object: UpdateUnion,
+        data: dict[str, Any],
+    ) -> Any:
+        data["limiter"] = self._limiter
+        return await handler(event_object, data)
