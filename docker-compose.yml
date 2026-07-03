@@ -15,5 +15,16 @@ services:
       timeout: 5s
       retries: 10
 
+  bot:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://maxhub:maxhub@postgres:5432/maxhub
+      MODE: polling
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   maxhub_pg_data:
