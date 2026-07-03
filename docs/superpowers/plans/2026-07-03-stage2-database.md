@@ -913,7 +913,12 @@ from app.middlewares import ActivityMiddleware
 def _make_message_created(*, user_id: int, chat_id: int, is_dm: bool) -> MessageCreated:
     chat_type = ChatType.DIALOG if is_dm else ChatType.CHAT
     message = Message(
-        sender=MaxUser(user_id=user_id, first_name="Test"),
+        sender=MaxUser(
+            user_id=user_id,
+            first_name="Test",
+            is_bot=False,
+            last_activity_time=0,
+        ),
         recipient=Recipient(user_id=user_id, chat_id=chat_id, chat_type=chat_type),
         timestamp=0,
     )
