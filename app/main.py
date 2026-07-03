@@ -9,6 +9,7 @@ from maxapi.webhook.fastapi import FastAPIMaxWebhook
 from app.config import get_settings
 from app.db.engine import get_sessionmaker
 from app.handlers.common import common_router
+from app.handlers.todo import todo_router
 from app.middlewares import ActivityMiddleware, LimiterMiddleware
 from app.rate_limit import RateLimitedBot
 
@@ -29,7 +30,7 @@ def build_dispatcher(bot: Bot) -> Dispatcher:
     dispatcher = Dispatcher()
     dispatcher.register_outer_middleware(ActivityMiddleware(get_sessionmaker()))
     dispatcher.register_outer_middleware(LimiterMiddleware(RateLimitedBot(bot)))
-    dispatcher.include_routers(common_router)
+    dispatcher.include_routers(common_router, todo_router)
     return dispatcher
 
 
