@@ -28,9 +28,7 @@ def _make_message_event(chat_id: int, user_id: int = 1) -> MessageCreated:
         sender=MaxUser(
             user_id=user_id, first_name="T", is_bot=False, last_activity_time=0
         ),
-        recipient=Recipient(
-            user_id=user_id, chat_id=chat_id, chat_type=ChatType.CHAT
-        ),
+        recipient=Recipient(user_id=user_id, chat_id=chat_id, chat_type=ChatType.CHAT),
         timestamp=0,
     )
     return MessageCreated(message=message, timestamp=0)
@@ -43,9 +41,7 @@ def _make_callback_event(
         sender=MaxUser(
             user_id=user_id, first_name="T", is_bot=False, last_activity_time=0
         ),
-        recipient=Recipient(
-            user_id=user_id, chat_id=chat_id, chat_type=ChatType.CHAT
-        ),
+        recipient=Recipient(user_id=user_id, chat_id=chat_id, chat_type=ChatType.CHAT),
         timestamp=0,
     )
     callback = Callback(

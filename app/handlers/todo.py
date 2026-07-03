@@ -68,9 +68,7 @@ async def handle_todo(
     if subcommand == "list":
         text, keyboard = await _render_todo_list(chat_id, session)
         attachments = [keyboard] if keyboard else None
-        await limiter.send_message(
-            chat_id=chat_id, text=text, attachments=attachments
-        )
+        await limiter.send_message(chat_id=chat_id, text=text, attachments=attachments)
         return
 
     if subcommand in {"done", "del"}:
@@ -95,9 +93,7 @@ async def handle_todo(
 
         text, keyboard = await _render_todo_list(chat_id, session)
         attachments = [keyboard] if keyboard else None
-        await limiter.send_message(
-            chat_id=chat_id, text=text, attachments=attachments
-        )
+        await limiter.send_message(chat_id=chat_id, text=text, attachments=attachments)
         return
 
     await limiter.send_message(
