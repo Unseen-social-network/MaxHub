@@ -1,0 +1,53 @@
+services:
+  bot:
+    image: ghcr.io/unseen-social-network/maxhub:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maxhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: maxhub
+    volumes:
+      - maxhub_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maxhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - maxhub_caddy_data:/data
+      - maxhub_caddy_config:/config
+    depends_on:
+      - bot
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  maxhub_pg_data:
+  maxhub_caddy_data:
+  maxhub_caddy_config:
