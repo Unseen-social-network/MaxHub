@@ -77,6 +77,10 @@ jobs:
           script: |
             cd ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ env.TAG }}/" .env
+            sed -i "s/^APP_VERSION=.*/APP_VERSION=${{ env.TAG }}/" .env
+            sed -i "s/^GIT_SHA=.*/GIT_SHA=${{ github.event.workflow_run.head_sha }}/" .env
+            sed -i "s/^BUILD_TIME=.*/BUILD_TIME=${{ steps.build_time.outputs.value }}/" .env
+            echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) tag=${{ env.TAG }} sha=${{ github.event.workflow_run.head_sha }}" >> deploy_history.log
             docker compose -f docker-compose.prod.nginx.yml pull
             docker compose -f docker-compose.prod.nginx.yml up -d
             docker image prune -f

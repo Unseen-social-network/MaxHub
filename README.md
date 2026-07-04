@@ -114,7 +114,13 @@ git tag v1.0.0
 git push --tags
 ```
 
-Это запускает `ci.yml` (тесты, линт, docker build). `deploy.yml` слушает не сам пуш тега, а завершение `ci.yml` (`on: workflow_run`) и стартует, только если тот прогон завершился успешно и был именно пушем тега — деплой упавшего/ещё выполняющегося CI невозможен. Дальше он соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальный `docker-compose.prod.nginx.yml` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.nginx.yml pull && up -d`).
+Это запускает `ci.yml` (тесты, линт, docker build). `deploy.yml` слушает не сам пуш тега, а завершение `ci.yml` (`on: workflow_run`) и стартует, только если тот прогон завершился успешно и был именно пушем тега — деплой упавшего/ещё выполняющегося CI невозможен. Дальше он:
+
+1. Соберёт образ и запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`.
+2. Скопирует актуальный `docker-compose.prod.nginx.yml` из репозитория на сервер (секреты в `.env` не трогает).
+3. Обновит в `.env` `IMAGE_TAG`, `APP_VERSION`, `GIT_SHA`, `BUILD_TIME` — без этого шага `/v` показывал бы устаревшие значения из `.env`, а не то, что реально запечено в образ (`docker-compose.prod.nginx.yml` пробрасывает эти переменные в контейнер через `environment:`).
+4. Допишет строку в `deploy_history.log` на сервере (`timestamp tag sha`) — по нему видно историю релизов и можно вручную откатиться, поставив в `.env` предыдущий `IMAGE_TAG` (старые образы остаются в GHCR).
+5. Перезапустит стек: `docker compose -f docker-compose.prod.nginx.yml pull && up -d`.
 
 ## Рассылка через `/broadcast`
 
