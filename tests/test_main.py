@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
+from bot.__main__ import create_app
 
 
 async def _noop_check_me(self) -> None:
@@ -25,7 +25,7 @@ def test_healthz_returns_ok(monkeypatch):
     async def _noop_sync_profile(bot):
         return None
 
-    import app.main as main_module
+    import bot.__main__ as main_module
 
     monkeypatch.setattr(main_module, "sync_bot_profile", _noop_sync_profile)
 
@@ -36,7 +36,7 @@ def test_healthz_returns_ok(monkeypatch):
 
     monkeypatch.setattr(Bot, "subscribe_webhook", _noop_subscribe_webhook)
 
-    from app.config import get_settings
+    from bot.config import get_settings
 
     get_settings.cache_clear()
 

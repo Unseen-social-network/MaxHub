@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.config import Settings
+from bot.config import Settings
 
 
 def test_settings_parses_admin_ids_from_comma_separated_string(monkeypatch):

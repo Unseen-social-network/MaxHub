@@ -1,5 +1,5 @@
-from app.middlewares import LimiterMiddleware
-from app.rate_limit import RateLimitedBot
+from bot.middlewares.limiter import LimiterMiddleware
+from bot.services.rate_limit import RateLimitedBot
 
 
 async def test_injects_limiter_into_handler_data():
