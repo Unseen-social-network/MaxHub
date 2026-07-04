@@ -82,9 +82,11 @@
 ├── docker/
 │   ├── Dockerfile
 │   ├── docker-entrypoint.sh
-│   ├── docker-compose.local.yml   # локальная разработка (bot + postgres)
-│   ├── docker-compose.prod.yml     # прод-компоуз (используется на сервере)
-│   └── Caddyfile
+│   ├── docker-compose.local.yml         # локальная разработка (bot + postgres)
+│   ├── docker-compose.prod.nginx.yml    # прод-компоуз (реально используется на сервере — за существующим nginx)
+│   ├── docker-compose.prod.caddyfile.yml # альтернатива со встроенным Caddy (если 443 свободен)
+│   ├── Caddyfile
+│   └── nginx/maxhub.conf.example
 ├── .github/workflows/
 │   ├── ci.yml               # push/PR: ruff, pytest, docker build (без push)
 │   └── deploy.yml           # ТОЛЬКО на push тега v*: build+push в GHCR, деплой по SSH
@@ -117,7 +119,7 @@
 
 - Версия приложения = git-тег (`v1.2.3`). Прокидывается в образ build-args `APP_VERSION`, `GIT_SHA`, `BUILD_TIME` → env.
 - **CI** (`ci.yml`): на каждый push и PR — ruff check, ruff format --check, pytest (Postgres как service-контейнер), docker build.
-- **CD** (`deploy.yml`): триггер строго `on: push: tags: ['v*']`. Build → push в GHCR (`{tag}` и `latest`) → синхронизировать `docker/docker-compose.prod.yml` и `docker/Caddyfile` из репозитория на сервер (`.env` не трогается — секреты живут только на сервере) → SSH на сервер (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`, `DEPLOY_PATH`) → обновить `IMAGE_TAG` в `.env` → `docker compose -f docker-compose.prod.yml pull && up -d`. Никакого деплоя с веток.
+- **CD** (`deploy.yml`): триггер строго `on: push: tags: ['v*']`. Build → push в GHCR (`{tag}` и `latest`) → синхронизировать `docker/docker-compose.prod.nginx.yml` из репозитория на сервер (`.env` не трогается — секреты живут только на сервере) → SSH на сервер (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`, `DEPLOY_PATH`, по умолчанию `/opt/max-bot`) → обновить `IMAGE_TAG` в `.env` → `docker compose -f docker-compose.prod.nginx.yml pull && up -d`. Бот публикуется только на `127.0.0.1:PORT`, HTTPS терминирует уже работающий на сервере nginx (см. `docker/nginx/README.md`). Никакого деплоя с веток.
 - Alembic-миграции применяются автоматически на старте контейнера (`alembic upgrade head` в entrypoint до запуска приложения).
 
 ## Команды разработки
@@ -176,7 +178,7 @@ Multi-stage Dockerfile на образах `ghcr.io/astral-sh/uv`: build-args AP
 
 **Этап 7 — CI/CD.**
 `.github/workflows/ci.yml`: на push и pull_request — uv sync, ruff check + format check, pytest (postgres как service-контейнер), docker build без пуша.
-`.github/workflows/deploy.yml`: триггер ТОЛЬКО `on: push: tags: ['v*']`. Шаги: checkout → docker build с build-args (APP_VERSION = `${{ github.ref_name }}`, GIT_SHA, BUILD_TIME) → push в GHCR с тегами `{tag}` и `latest` → деплой через appleboy/ssh-action (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`): на сервере `cd /opt/maxbot && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG={tag}/" .env && docker compose pull && docker compose up -d && docker image prune -f`.
+`.github/workflows/deploy.yml`: триггер ТОЛЬКО `on: push: tags: ['v*']`. Шаги: checkout → docker build с build-args (APP_VERSION = `${{ github.ref_name }}`, GIT_SHA, BUILD_TIME) → push в GHCR с тегами `{tag}` и `latest` → scp актуального `docker/docker-compose.prod.nginx.yml` на сервер → деплой через appleboy/ssh-action (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`, `DEPLOY_PATH` по умолчанию `/opt/max-bot`): на сервере `cd /opt/max-bot && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG={tag}/" .env && docker compose -f docker-compose.prod.nginx.yml pull && docker compose -f docker-compose.prod.nginx.yml up -d && docker image prune -f`.
 
 **Этап 8 — финал.**
 README.md на русском: функции, получение токена у MasterBot (имя MaxHub, описание из CLAUDE.md), настройка сервера (/opt/maxbot, .env с BOT_TOKEN/DOMAIN/ADMIN_IDS/POSTGRES_PASSWORD/IMAGE_TAG, DNS, порты 80/443), GitHub secrets, процесс релиза (`git tag v1.0.0 && git push --tags`), как сделать рассылку через /broadcast. Прогони ruff и pytest, проверь `docker compose up --build`. Осмысленные коммиты по этапам.

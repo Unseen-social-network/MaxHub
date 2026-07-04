@@ -46,15 +46,15 @@ jobs:
             GIT_SHA=${{ github.sha }}
             BUILD_TIME=${{ steps.build_time.outputs.value }}
 
-      - name: Обновить docker-compose.prod.yml и Caddyfile на сервере
+      - name: Обновить docker-compose.prod.nginx.yml на сервере
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "docker/docker-compose.prod.yml,docker/Caddyfile"
-          target: ${{ secrets.DEPLOY_PATH || '/opt/maxbot' }}
+          source: "docker/docker-compose.prod.nginx.yml"
+          target: ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
           strip_components: 1
 
       - name: Deploy over SSH
@@ -65,8 +65,8 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH || '/opt/maxbot' }}
+            cd ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ github.ref_name }}/" .env
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.nginx.yml pull
+            docker compose -f docker-compose.prod.nginx.yml up -d
             docker image prune -f

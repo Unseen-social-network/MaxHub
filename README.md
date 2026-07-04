@@ -80,16 +80,16 @@ POSTGRES_PASSWORD=...        # придумайте пароль для Postgres
 IMAGE_TAG=latest
 ```
 
-`docker-compose.prod.yml` и `Caddyfile` не нужно копировать вручную — workflow `deploy.yml` сам обновляет их на сервере при каждом релизе (см. «Процесс релиза» ниже) и запускает `docker compose -f docker-compose.prod.yml pull && up -d`. Для самой первой раскатки до первого тега можно скопировать файлы и поднять стек вручную:
+`docker-compose.prod.nginx.yml` не нужно копировать вручную — workflow `deploy.yml` сам обновляет его на сервере при каждом релизе (см. «Процесс релиза» ниже) и запускает `docker compose -f docker-compose.prod.nginx.yml pull && up -d`. Для самой первой раскатки до первого тега можно скопировать файл и поднять стек вручную:
 
 ```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.nginx.yml pull
+docker compose -f docker-compose.prod.nginx.yml up -d
 ```
 
-Caddy автоматически получит и будет продлевать сертификат Let's Encrypt для `DOMAIN`. Бот при старте сам подпишется на вебхук `https://{DOMAIN}{WEBHOOK_PATH}` и применит миграции БД (`alembic upgrade head` выполняется в entrypoint контейнера перед запуском приложения).
+Бот слушает только `127.0.0.1:${PORT}` — HTTPS и сертификат Let's Encrypt обслуживает уже работающий на хосте nginx (см. [`docker/nginx/README.md`](docker/nginx/README.md)), а не Caddy. Бот при старте сам подпишется на вебхук `https://{DOMAIN}{WEBHOOK_PATH}` и применит миграции БД (`alembic upgrade head` выполняется в entrypoint контейнера перед запуском приложения).
 
-**Если на сервере уже занят порт 443 своим nginx** — используйте `docker/docker-compose.prod.nginx.yml` вместо Caddy, подробности в [`docker/nginx/README.md`](docker/nginx/README.md).
+**Если порт 443 на сервере свободен** и вы хотите, чтобы сертификат получал сам контейнер — используйте `docker/docker-compose.prod.caddyfile.yml` + `docker/Caddyfile` вместо nginx-варианта (потребует ручной правки `deploy.yml`, по умолчанию workflow настроен на nginx-сценарий).
 
 ## GitHub Secrets (для CI/CD)
 
@@ -101,7 +101,7 @@ Caddy автоматически получит и будет продлеват
 | `SSH_USER` | пользователь для SSH |
 | `SSH_KEY` | приватный SSH-ключ |
 | `SSH_PORT` | (опционально) порт SSH, если не 22 |
-| `DEPLOY_PATH` | (опционально) каталог с `.env`/`docker-compose.prod.yml` на сервере, если не `/opt/maxbot` |
+| `DEPLOY_PATH` | (опционально) каталог с `.env`/`docker-compose.prod.nginx.yml` на сервере, если не `/opt/max-bot` |
 
 `GITHUB_TOKEN` для пуша образа в GHCR передаётся автоматически, ничего настраивать не нужно.
 
@@ -114,7 +114,7 @@ git tag v1.0.0
 git push --tags
 ```
 
-Workflow `deploy.yml` соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальные `docker-compose.prod.yml` и `Caddyfile` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.yml pull && up -d`).
+Workflow `deploy.yml` соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальный `docker-compose.prod.nginx.yml` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.nginx.yml pull && up -d`).
 
 ## Рассылка через `/broadcast`
 
