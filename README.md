@@ -80,11 +80,11 @@ POSTGRES_PASSWORD=...        # придумайте пароль для Postgres
 IMAGE_TAG=latest
 ```
 
-Скопируйте `docker/docker-compose.prod.yml` в `/opt/maxbot/docker-compose.yml` и `docker/Caddyfile` в `/opt/maxbot/Caddyfile`, затем:
+`docker-compose.prod.yml` и `Caddyfile` не нужно копировать вручную — workflow `deploy.yml` сам обновляет их на сервере при каждом релизе (см. «Процесс релиза» ниже) и запускает `docker compose -f docker-compose.prod.yml pull && up -d`. Для самой первой раскатки до первого тега можно скопировать файлы и поднять стек вручную:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Caddy автоматически получит и будет продлевать сертификат Let's Encrypt для `DOMAIN`. Бот при старте сам подпишется на вебхук `https://{DOMAIN}{WEBHOOK_PATH}` и применит миграции БД (`alembic upgrade head` выполняется в entrypoint контейнера перед запуском приложения).
@@ -101,7 +101,7 @@ Caddy автоматически получит и будет продлеват
 | `SSH_USER` | пользователь для SSH |
 | `SSH_KEY` | приватный SSH-ключ |
 | `SSH_PORT` | (опционально) порт SSH, если не 22 |
-| `DEPLOY_PATH` | (опционально) каталог с `.env`/`docker-compose.yml` на сервере, если не `/opt/maxbot` |
+| `DEPLOY_PATH` | (опционально) каталог с `.env`/`docker-compose.prod.yml` на сервере, если не `/opt/maxbot` |
 
 `GITHUB_TOKEN` для пуша образа в GHCR передаётся автоматически, ничего настраивать не нужно.
 
@@ -114,7 +114,7 @@ git tag v1.0.0
 git push --tags
 ```
 
-Workflow `deploy.yml` соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, затем по SSH обновит `IMAGE_TAG` в `/opt/maxbot/.env` на сервере и перезапустит стек (`docker compose pull && docker compose up -d`).
+Workflow `deploy.yml` соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальные `docker-compose.prod.yml` и `Caddyfile` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.yml pull && up -d`).
 
 ## Рассылка через `/broadcast`
 

@@ -117,7 +117,7 @@
 
 - Версия приложения = git-тег (`v1.2.3`). Прокидывается в образ build-args `APP_VERSION`, `GIT_SHA`, `BUILD_TIME` → env.
 - **CI** (`ci.yml`): на каждый push и PR — ruff check, ruff format --check, pytest (Postgres как service-контейнер), docker build.
-- **CD** (`deploy.yml`): триггер строго `on: push: tags: ['v*']`. Build → push в GHCR (`{tag}` и `latest`) → SSH на сервер (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`) → обновить `IMAGE_TAG` в `.env` → `docker compose pull && docker compose up -d`. Никакого деплоя с веток.
+- **CD** (`deploy.yml`): триггер строго `on: push: tags: ['v*']`. Build → push в GHCR (`{tag}` и `latest`) → синхронизировать `docker/docker-compose.prod.yml` и `docker/Caddyfile` из репозитория на сервер (`.env` не трогается — секреты живут только на сервере) → SSH на сервер (secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY`, опционально `SSH_PORT`, `DEPLOY_PATH`) → обновить `IMAGE_TAG` в `.env` → `docker compose -f docker-compose.prod.yml pull && up -d`. Никакого деплоя с веток.
 - Alembic-миграции применяются автоматически на старте контейнера (`alembic upgrade head` в entrypoint до запуска приложения).
 
 ## Команды разработки
