@@ -107,14 +107,14 @@ docker compose -f docker-compose.prod.nginx.yml up -d
 
 ## Процесс релиза
 
-Деплой запускается **только** пушем тега вида `v*`:
+Пушим тег вида `v*`:
 
 ```bash
 git tag v1.0.0
 git push --tags
 ```
 
-Workflow `deploy.yml` соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальный `docker-compose.prod.nginx.yml` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.nginx.yml pull && up -d`).
+Это запускает `ci.yml` (тесты, линт, docker build). `deploy.yml` слушает не сам пуш тега, а завершение `ci.yml` (`on: workflow_run`) и стартует, только если тот прогон завершился успешно и был именно пушем тега — деплой упавшего/ещё выполняющегося CI невозможен. Дальше он соберёт образ, запушит его в `ghcr.io/unseen-social-network/maxhub` с тегами `{tag}` и `latest`, скопирует актуальный `docker-compose.prod.nginx.yml` из репозитория на сервер (`.env` не трогает — секреты живут только на сервере), обновит `IMAGE_TAG` в `.env` и перезапустит стек (`docker compose -f docker-compose.prod.nginx.yml pull && up -d`).
 
 ## Рассылка через `/broadcast`
 

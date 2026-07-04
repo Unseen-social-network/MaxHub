@@ -1,9 +1,9 @@
 name: Deploy
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -14,9 +14,19 @@ env:
 
 jobs:
   deploy:
+    # Деплоим только когда CI отработал успешно и запускался пушем тега
+    # (для push тега head_branch = имя тега, напр. "v1.0.0"; для PR/веток — нет).
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.workflow_run.head_branch }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -39,11 +49,11 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.IMAGE_NAME }}:${{ env.TAG }}
             ${{ env.IMAGE_NAME }}:latest
           build-args: |
-            APP_VERSION=${{ github.ref_name }}
-            GIT_SHA=${{ github.sha }}
+            APP_VERSION=${{ env.TAG }}
+            GIT_SHA=${{ github.event.workflow_run.head_sha }}
             BUILD_TIME=${{ steps.build_time.outputs.value }}
 
       - name: Обновить docker-compose.prod.nginx.yml на сервере
@@ -66,7 +76,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
-            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ github.ref_name }}/" .env
+            sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ env.TAG }}/" .env
             docker compose -f docker-compose.prod.nginx.yml pull
             docker compose -f docker-compose.prod.nginx.yml up -d
             docker image prune -f
