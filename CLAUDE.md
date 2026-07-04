@@ -50,34 +50,45 @@
 
 ## Структура
 
+Каталоги совпадают по конвенции с соседними ботами (`culture-max-bot`, `banword-max-bot`): `src/<package>/` layout, `docker/` со всеми docker-файлами, `migrations/` вместо `alembic/`, корневой `Makefile`, плоский `tests/`.
+
 ```
 .
-├── app/
-│   ├── main.py              # точка входа: Bot, Dispatcher, webhook, scheduler
-│   ├── config.py            # pydantic-settings
-│   ├── rate_limit.py        # исходящий лимитер (см. ниже)
+├── src/bot/
+│   ├── __main__.py           # точка входа: Bot, Dispatcher, webhook, scheduler
+│   ├── config.py              # pydantic-settings
 │   ├── handlers/
+│   │   ├── common.py           # /start, /help
 │   │   ├── todo.py
 │   │   ├── word_of_day.py
 │   │   ├── converter.py
-│   │   └── admin.py         # /v, /broadcast (FSM)
-│   ├── services/            # бизнес-логика без привязки к MAX API
+│   │   └── admin.py             # /v, /broadcast (FSM)
+│   ├── middlewares/
+│   │   ├── activity.py          # апдейт активности пользователя + сессия в data
+│   │   └── limiter.py            # RateLimitedBot в data
+│   ├── services/                 # бизнес-логика без привязки к MAX API
+│   │   ├── rate_limit.py          # исходящий лимитер (см. ниже)
+│   │   ├── broadcast.py
+│   │   ├── converter.py
+│   │   └── word_of_day.py
 │   └── db/
-│       ├── engine.py        # async engine + session factory
-│       ├── models.py        # SQLAlchemy 2.x declarative (Mapped/mapped_column)
-│       └── repo/            # репозитории: users, todos, subscriptions
-├── alembic/                 # миграции (async env.py)
+│       ├── session.py             # async engine + session factory
+│       ├── models.py               # SQLAlchemy 2.x declarative (Mapped/mapped_column)
+│       └── repositories/            # репозитории: users, todos, subscriptions, broadcasts
+├── migrations/                # Alembic-миграции (async env.py)
 ├── alembic.ini
 ├── data/words.json
-├── tests/
-├── deploy/
-│   ├── Caddyfile
-│   └── docker-compose.yml   # прод-компоуз (используется на сервере)
+├── tests/                     # плоский, файлы с префиксом слоя: test_db_*, test_handlers_*, test_services_*
+├── docker/
+│   ├── Dockerfile
+│   ├── docker-entrypoint.sh
+│   ├── docker-compose.local.yml   # локальная разработка (bot + postgres)
+│   ├── docker-compose.prod.yml     # прод-компоуз (используется на сервере)
+│   └── Caddyfile
 ├── .github/workflows/
 │   ├── ci.yml               # push/PR: ruff, pytest, docker build (без push)
 │   └── deploy.yml           # ТОЛЬКО на push тега v*: build+push в GHCR, деплой по SSH
-├── Dockerfile
-├── docker-compose.yml       # локальная разработка (bot + postgres)
+├── Makefile                  # стандартные команды разработки (make help)
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -95,7 +106,7 @@
 
 ## Ограничения MAX API (критично)
 
-Все исходящие вызовы API идут через единый лимитер в `app/rate_limit.py`:
+Все исходящие вызовы API идут через единый лимитер в `src/bot/services/rate_limit.py`:
 
 - **не более 2 сообщений в секунду в один чат** (per-chat token bucket, ключ — chat_id / user_id для ЛС)
 - **не более 30 запросов в секунду суммарно** (глобальный лимитер)
@@ -111,15 +122,17 @@
 
 ## Команды разработки
 
+Через `make` (см. `make help` за полным списком) или напрямую через `uv`:
+
 ```bash
-uv sync
-docker compose up -d postgres            # локальная БД
-uv run alembic upgrade head
-uv run alembic revision --autogenerate -m "..."
-MODE=polling uv run python -m app.main   # локальный запуск без вебхука
-uv run ruff check . && uv run ruff format --check .
-uv run pytest
-docker compose up --build
+make install                              # uv sync
+make migrate                              # alembic upgrade head
+make migration m="описание"                # новая миграция
+make run                                   # локальный запуск без вебхука (MODE=polling)
+make lint && make format                   # ruff check + ruff format
+make test                                  # pytest (нужен запущенный postgres)
+make up-local                              # docker compose -f docker/docker-compose.local.yml up --build (bot + postgres)
+make down-local
 ```
 
 ## Конвенции

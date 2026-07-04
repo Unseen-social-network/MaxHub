@@ -28,20 +28,19 @@ Python 3.12+ / uv, библиотека `maxapi`, FastAPI + uvicorn (webhook), P
 ## Локальная разработка
 
 ```bash
-uv sync
+make install                # uv sync
 cp .env.example .env        # заполните BOT_TOKEN своим токеном для локальных проверок
-docker compose up -d postgres
-uv run alembic upgrade head
-MODE=polling uv run python -m app.main
+make migrate                 # alembic upgrade head (нужен запущенный postgres, см. make up-local)
+make run                      # MODE=polling, локальный запуск без вебхука
 ```
 
-Полезные команды:
+Полезные команды (см. полный список через `make help`):
 
 ```bash
-uv run ruff check . && uv run ruff format --check .   # линт и форматирование
-uv run pytest                                          # тесты (нужен запущенный postgres)
-docker compose up --build                              # полная локальная сборка образа
-uv run alembic revision --autogenerate -m "..."         # новая миграция
+make lint && make format      # ruff check + ruff format
+make test                      # тесты (нужен запущенный postgres)
+make up-local                   # docker compose -f docker/docker-compose.local.yml up --build (bot + postgres)
+make migration m="..."           # новая миграция
 ```
 
 ## Получение токена бота
@@ -78,7 +77,7 @@ POSTGRES_PASSWORD=...        # придумайте пароль для Postgres
 IMAGE_TAG=latest
 ```
 
-Скопируйте `deploy/docker-compose.yml` и `deploy/Caddyfile` в `/opt/maxbot/`, затем:
+Скопируйте `docker/docker-compose.prod.yml` в `/opt/maxbot/docker-compose.yml` и `docker/Caddyfile` в `/opt/maxbot/Caddyfile`, затем:
 
 ```bash
 docker compose pull
