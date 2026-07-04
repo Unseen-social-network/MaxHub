@@ -1,0 +1,38 @@
+name: maxhub-prod
+
+services:
+  bot:
+    image: ghcr.io/unseen-social-network/maxhub:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maxhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: maxhub
+    volumes:
+      - maxhub_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maxhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  maxhub_pg_data:

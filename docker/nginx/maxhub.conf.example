@@ -1,0 +1,52 @@
+# Пример конфига для существующего nginx на хосте (когда порты 80/443 уже
+# заняты им и Caddy из docker-compose.prod.yml использовать нельзя).
+#
+# 1. Разверните бота через docker-compose.prod.nginx.yml (без Caddy,
+#    порт бота публикуется только на 127.0.0.1).
+# 2. Скопируйте этот файл, например, в /etc/nginx/sites-available/maxhub.conf
+#    и замените bot.example.com на реальный домен (DOMAIN из .env).
+# 3. Получите сертификат существующим certbot, если его ещё нет для домена:
+#      certbot certonly --nginx -d bot.example.com
+# 4. Включите сайт и перезагрузите nginx:
+#      ln -s /etc/nginx/sites-available/maxhub.conf /etc/nginx/sites-enabled/
+#      nginx -t && systemctl reload nginx
+
+upstream maxhub_bot {
+    server 127.0.0.1:8080;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name bot.example.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name bot.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/bot.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bot.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # совпадает с лимитом входного файла у конвертера изображений (20 МБ)
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://maxhub_bot;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

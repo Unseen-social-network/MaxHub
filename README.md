@@ -86,6 +86,8 @@ docker compose up -d
 
 Caddy автоматически получит и будет продлевать сертификат Let's Encrypt для `DOMAIN`. Бот при старте сам подпишется на вебхук `https://{DOMAIN}{WEBHOOK_PATH}` и применит миграции БД (`alembic upgrade head` выполняется в entrypoint контейнера перед запуском приложения).
 
+**Если на сервере уже занят порт 443 своим nginx** — используйте `docker/docker-compose.prod.nginx.yml` вместо Caddy, подробности в [`docker/nginx/README.md`](docker/nginx/README.md).
+
 ## GitHub Secrets (для CI/CD)
 
 В настройках репозитория → Settings → Secrets and variables → Actions добавьте:
