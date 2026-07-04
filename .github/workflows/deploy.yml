@@ -54,7 +54,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd /opt/maxbot
+            cd ${{ secrets.DEPLOY_PATH || '/opt/maxbot' }}
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ github.ref_name }}/" .env
             docker compose pull
             docker compose up -d
