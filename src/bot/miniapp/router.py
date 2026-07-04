@@ -1,0 +1,163 @@
+import asyncio
+from datetime import date
+from pathlib import Path
+
+from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from bot.config import get_settings
+from bot.db.repositories.broadcasts import BroadcastRepo
+from bot.db.repositories.todos import TodoRepo
+from bot.db.repositories.users import UserRepo
+from bot.db.repositories.word_subscriptions import WordSubscriptionRepo
+from bot.miniapp.auth import InitData, InvalidInitData, verify_init_data
+from bot.services.broadcast import run_broadcast
+from bot.services.rate_limit import RateLimitedBot
+from bot.services.word_of_day import load_words, pick_word_for_date
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+class BroadcastRequest(BaseModel):
+    text: str
+
+
+def build_miniapp_router(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    limiter: RateLimitedBot,
+    *,
+    bot_token: str,
+) -> APIRouter:
+    router = APIRouter()
+
+    def _extract_init_data(x_init_data: str | None) -> InitData:
+        if not x_init_data:
+            raise HTTPException(status_code=401, detail="Missing X-Init-Data")
+        try:
+            return verify_init_data(x_init_data, bot_token)
+        except InvalidInitData as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    def _require_admin(init_data: InitData) -> int:
+        if init_data.user is None or init_data.user.id not in get_settings().admin_ids:
+            raise HTTPException(status_code=403, detail="Только для админов")
+        return init_data.user.id
+
+    @router.get("/")
+    async def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    @router.get("/api/todos")
+    async def get_todos(x_init_data: str | None = Header(default=None)) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        async with sessionmaker() as session:
+            todos = await TodoRepo(session).list_for_chat(init_data.chat.id)
+
+        return {
+            "todos": [
+                {"id": todo.id, "text": todo.text, "is_done": todo.is_done}
+                for todo in todos
+            ]
+        }
+
+    @router.get("/api/word")
+    async def get_word(x_init_data: str | None = Header(default=None)) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        word = pick_word_for_date(date.today(), load_words())
+
+        subscribed = False
+        if init_data.chat is not None:
+            async with sessionmaker() as session:
+                subscribed = await WordSubscriptionRepo(session).is_subscribed(
+                    init_data.chat.id
+                )
+
+        return {
+            "word": word["word"],
+            "definition": word["definition"],
+            "example": word["example"],
+            "subscribed": subscribed,
+        }
+
+    @router.post("/api/word/subscribe")
+    async def subscribe_word(x_init_data: str | None = Header(default=None)) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        async with sessionmaker() as session:
+            await WordSubscriptionRepo(session).subscribe(init_data.chat.id)
+            await session.commit()
+
+        return {"subscribed": True}
+
+    @router.post("/api/word/unsubscribe")
+    async def unsubscribe_word(x_init_data: str | None = Header(default=None)) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        async with sessionmaker() as session:
+            await WordSubscriptionRepo(session).unsubscribe(init_data.chat.id)
+            await session.commit()
+
+        return {"subscribed": False}
+
+    @router.get("/api/broadcast/summary")
+    async def broadcast_summary(x_init_data: str | None = Header(default=None)) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        _require_admin(init_data)
+
+        async with sessionmaker() as session:
+            recipients = await UserRepo(session).get_active_recipients(
+                get_settings().broadcast_active_days
+            )
+
+        return {"active_recipients": len(recipients)}
+
+    @router.post("/api/broadcast")
+    async def send_broadcast(
+        payload: BroadcastRequest, x_init_data: str | None = Header(default=None)
+    ) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        admin_id = _require_admin(init_data)
+
+        text = payload.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Текст рассылки пуст")
+
+        async with sessionmaker() as session:
+            broadcast = await BroadcastRepo(session).create(
+                admin_id=admin_id, text=text
+            )
+            await session.commit()
+            broadcast_id = broadcast.id
+
+        admin_chat_id = init_data.chat.id if init_data.chat else admin_id
+
+        _spawn_background(
+            run_broadcast(
+                limiter,
+                admin_chat_id=admin_chat_id,
+                broadcast_id=broadcast_id,
+                text=text,
+            )
+        )
+
+        return {"status": "started"}
+
+    return router

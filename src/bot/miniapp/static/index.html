@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MaxHub</title>
+  <script src="https://st.max.ru/js/max-web-app.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f5f7;
+      --card: #ffffff;
+      --text: #1c1e21;
+      --muted: #6b7280;
+      --accent: #2f6fed;
+      --border: #e3e5e8;
+      --danger: #d64545;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15161a;
+        --card: #1f2126;
+        --text: #f2f3f5;
+        --muted: #9aa0aa;
+        --accent: #5b8def;
+        --border: #2c2f36;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    #app { max-width: 480px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 8px 0 16px; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    section h2 { margin: 0 0 12px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    li:last-child { border-bottom: none; }
+    li.done { color: var(--muted); text-decoration: line-through; }
+    .empty { color: var(--muted); font-size: 14px; }
+    button {
+      font: inherit;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+    }
+    button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    button:disabled { opacity: 0.5; cursor: default; }
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 10px;
+      resize: vertical;
+    }
+    .word-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .word-example { color: var(--muted); font-style: italic; margin-top: 8px; }
+    .error { color: var(--danger); font-size: 14px; margin-top: 8px; }
+    .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>MaxHub</h1>
+
+    <section id="todo-section">
+      <h2>Список дел</h2>
+      <ul id="todo-list"><li class="empty">Загрузка…</li></ul>
+    </section>
+
+    <section id="word-section">
+      <h2>Слово дня</h2>
+      <div id="word-body">Загрузка…</div>
+      <div class="row" style="margin-top: 12px;">
+        <button id="word-toggle" class="secondary" disabled>…</button>
+      </div>
+    </section>
+
+    <section id="broadcast-section" hidden>
+      <h2>Рассылка</h2>
+      <div id="broadcast-summary" class="empty"></div>
+      <textarea id="broadcast-text" placeholder="Текст рассылки…"></textarea>
+      <div class="row" style="margin-top: 12px;">
+        <button id="broadcast-send">Отправить</button>
+      </div>
+      <div id="broadcast-status" class="empty"></div>
+    </section>
+  </div>
+
+  <script>
+    const initData = window.WebApp ? window.WebApp.initData : "";
+
+    async function api(path, options) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "X-Init-Data": initData,
+          "Content-Type": "application/json",
+          ...(options && options.headers ? options.headers : {}),
+        },
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(detail || `HTTP ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function loadTodos() {
+      const list = document.getElementById("todo-list");
+      try {
+        const data = await api("api/todos");
+        if (data.todos.length === 0) {
+          list.innerHTML = '<li class="empty">Список дел пуст</li>';
+          return;
+        }
+        list.innerHTML = data.todos
+          .map(
+            (todo) =>
+              `<li class="${todo.is_done ? "done" : ""}">${todo.is_done ? "✅" : "⬜"} ${escapeHtml(todo.text)}</li>`
+          )
+          .join("");
+      } catch (err) {
+        list.innerHTML = `<li class="error">${escapeHtml(err.message)}</li>`;
+      }
+    }
+
+    let wordSubscribed = false;
+
+    async function loadWord() {
+      const body = document.getElementById("word-body");
+      const toggle = document.getElementById("word-toggle");
+      try {
+        const data = await api("api/word");
+        wordSubscribed = data.subscribed;
+        body.innerHTML = `
+          <div class="word-title">${escapeHtml(data.word)}</div>
+          <div>${escapeHtml(data.definition)}</div>
+          <div class="word-example">${escapeHtml(data.example)}</div>
+        `;
+        toggle.disabled = false;
+        toggle.textContent = wordSubscribed ? "Отписаться от рассылки" : "Подписать чат";
+      } catch (err) {
+        body.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    document.getElementById("word-toggle").addEventListener("click", async () => {
+      const toggle = document.getElementById("word-toggle");
+      toggle.disabled = true;
+      try {
+        const path = wordSubscribed ? "api/word/unsubscribe" : "api/word/subscribe";
+        const data = await api(path, { method: "POST" });
+        wordSubscribed = data.subscribed;
+        toggle.textContent = wordSubscribed ? "Отписаться от рассылки" : "Подписать чат";
+      } finally {
+        toggle.disabled = false;
+      }
+    });
+
+    async function loadBroadcastPanel() {
+      const section = document.getElementById("broadcast-section");
+      try {
+        const data = await api("api/broadcast/summary");
+        section.hidden = false;
+        document.getElementById("broadcast-summary").textContent =
+          `Активных получателей: ${data.active_recipients}`;
+      } catch (err) {
+        section.hidden = true;
+      }
+    }
+
+    document.getElementById("broadcast-send").addEventListener("click", async () => {
+      const textarea = document.getElementById("broadcast-text");
+      const status = document.getElementById("broadcast-status");
+      const button = document.getElementById("broadcast-send");
+      const text = textarea.value.trim();
+      if (!text) {
+        status.textContent = "Введите текст рассылки";
+        status.className = "error";
+        return;
+      }
+      button.disabled = true;
+      status.className = "empty";
+      status.textContent = "Отправка…";
+      try {
+        await api("api/broadcast", { method: "POST", body: JSON.stringify({ text }) });
+        status.textContent = "Рассылка запущена";
+        textarea.value = "";
+      } catch (err) {
+        status.className = "error";
+        status.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    function escapeHtml(value) {
+      const div = document.createElement("div");
+      div.textContent = value;
+      return div.innerHTML;
+    }
+
+    loadTodos();
+    loadWord();
+    loadBroadcastPanel();
+  </script>
+</body>
+</html>

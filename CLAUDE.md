@@ -36,6 +36,7 @@
 3. **Конвертер файлов/изображений** — пользователь отправляет изображение, бот предлагает кнопками целевой формат (png/jpg/webp/pdf), конвертация через Pillow; аудио/видео через ffmpeg — опционально, за фичефлагом.
 4. **Админ-рассылка в ЛС** — команда `/broadcast` (только для `ADMIN_IDS`): массовая отправка информационного сообщения в личку всем **активным пользователям**. Активный = писал боту в ЛС за последние `BROADCAST_ACTIVE_DAYS` дней (по умолчанию 30). Сценарий через FSM: админ вводит `/broadcast` → бот просит текст → показывает превью с числом получателей → инлайн-кнопки «Отправить / Отменить» → рассылка строго через лимитер → итоговый отчёт (отправлено / не доставлено). Пользователи, заблокировавшие бота, помечаются `is_blocked=true` и исключаются из будущих рассылок.
 5. **`/v`** — только для админов: текущий тег, git sha, время сборки.
+6. **Mini App** — веб-версия части механик бота (список дел на чтение, слово дня + подписка, рассылка для админов), открывается кнопкой `/app` внутри чата (`OpenAppButton`) по отдельному пути `MINIAPP_PATH` на том же домене, что и вебхук. Авторизация — через MAX Bridge `window.WebApp.initData`, подпись проверяется на бэкенде (HMAC-SHA256 по токену бота).
 
 ## Стек
 
@@ -62,10 +63,15 @@
 │   │   ├── todo.py
 │   │   ├── word_of_day.py
 │   │   ├── converter.py
-│   │   └── admin.py             # /v, /broadcast (FSM)
+│   │   ├── admin.py             # /v, /broadcast (FSM)
+│   │   └── fallback.py           # ответ на нераспознанную команду
 │   ├── middlewares/
 │   │   ├── activity.py          # апдейт активности пользователя + сессия в data
 │   │   └── limiter.py            # RateLimitedBot в data
+│   ├── miniapp/                   # веб-версия механик бота (см. «Функции» п.6)
+│   │   ├── auth.py                 # проверка подписи MAX Bridge initData
+│   │   ├── router.py                # FastAPI-роутер: /, /api/todos, /api/word, /api/broadcast
+│   │   └── static/index.html         # фронтенд (vanilla JS, без сборки)
 │   ├── services/                 # бизнес-логика без привязки к MAX API
 │   │   ├── rate_limit.py          # исходящий лимитер (см. ниже)
 │   │   ├── broadcast.py
@@ -104,7 +110,7 @@
 
 ## Конфигурация (pydantic-settings, env / .env)
 
-`BOT_TOKEN`, `DOMAIN`, `WEBHOOK_PATH`, `PORT`, `MODE` (webhook|polling), `ADMIN_IDS` (через запятую), `DATABASE_URL` (`postgresql+asyncpg://...`), `TZ` (default Europe/Moscow), `BROADCAST_ACTIVE_DAYS` (default 30), `APP_VERSION`, `GIT_SHA`, `BUILD_TIME`. Секреты только через env; в репо — `.env.example`.
+`BOT_TOKEN`, `DOMAIN`, `WEBHOOK_PATH`, `MINIAPP_PATH` (default `/miniapp`), `PORT`, `MODE` (webhook|polling), `ADMIN_IDS` (через запятую), `DATABASE_URL` (`postgresql+asyncpg://...`), `TZ` (default Europe/Moscow), `BROADCAST_ACTIVE_DAYS` (default 30), `APP_VERSION`, `GIT_SHA`, `BUILD_TIME`. Секреты только через env; в репо — `.env.example`.
 
 ## Ограничения MAX API (критично)
 

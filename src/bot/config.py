@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     bot_token: str
     domain: str
     webhook_path: str
+    miniapp_path: str = "/miniapp"
     port: int
     mode: Literal["webhook", "polling"]
     admin_ids: Annotated[list[int], NoDecode]

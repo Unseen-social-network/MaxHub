@@ -11,6 +11,7 @@ fallback_router = Router("fallback")
 KNOWN_COMMANDS = [
     "/start",
     "/help",
+    "/app",
     "/todo add ",
     "/todo list",
     "/todo done ",

@@ -32,6 +32,7 @@ def test_settings_defaults(monkeypatch):
     assert settings.tz == "Europe/Moscow"
     assert settings.broadcast_active_days == 30
     assert settings.app_version == "dev"
+    assert settings.miniapp_path == "/miniapp"
 
 
 def test_settings_rejects_invalid_mode(monkeypatch):

@@ -1,6 +1,8 @@
 from maxapi import Router
 from maxapi.filters.command import Command, CommandStart
+from maxapi.types.attachments.buttons import OpenAppButton
 from maxapi.types.updates.message_created import MessageCreated
+from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 
 from bot.services.rate_limit import RateLimitedBot
 
@@ -19,7 +21,8 @@ HELP_TEXT = (
     "/word unsub — отписаться\n\n"
     "🖼 Конвертер изображений:\n"
     "Пришлите картинку — бот предложит форматы для конвертации.\n\n"
-    "/help — это сообщение"
+    "/help — это сообщение\n"
+    "/app — открыть мини-приложение"
 )
 
 
@@ -33,3 +36,24 @@ async def handle_start(event: MessageCreated, limiter: RateLimitedBot) -> None:
 async def handle_help(event: MessageCreated, limiter: RateLimitedBot) -> None:
     chat_id, _user_id = event.get_ids()
     await limiter.send_message(chat_id=chat_id, text=HELP_TEXT)
+
+
+@common_router.message_created(Command("app"))
+async def handle_open_app(event: MessageCreated, limiter: RateLimitedBot) -> None:
+    chat_id, _user_id = event.get_ids()
+    if chat_id is None:
+        return
+
+    bot_me = event._ensure_bot().me  # noqa: SLF001
+    keyboard = InlineKeyboardBuilder()
+    keyboard.add(
+        OpenAppButton(
+            text="📱 Открыть приложение",
+            contact_id=bot_me.user_id if bot_me else None,
+        )
+    )
+    await limiter.send_message(
+        chat_id=chat_id,
+        text="Мини-приложение MaxHub: список дел, слово дня и рассылка для админов.",
+        attachments=[keyboard.as_markup()],
+    )

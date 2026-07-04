@@ -17,6 +17,7 @@ from bot.handlers.todo import todo_router
 from bot.handlers.word_of_day import word_of_day_router
 from bot.middlewares.activity import ActivityMiddleware
 from bot.middlewares.limiter import LimiterMiddleware
+from bot.miniapp.router import build_miniapp_router
 from bot.services.rate_limit import RateLimitedBot
 from bot.services.word_of_day import broadcast_daily_word
 
@@ -96,6 +97,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(lifespan=lifespan)
     webhook.setup(app, path=settings.webhook_path)
+    app.include_router(
+        build_miniapp_router(get_sessionmaker(), limiter, bot_token=settings.bot_token),
+        prefix=settings.miniapp_path,
+    )
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
