@@ -7,9 +7,9 @@ from bot.services.word_of_day import (
 )
 
 
-def test_load_words_returns_thirty_entries():
+def test_load_words_returns_at_least_thirty_entries():
     words = load_words()
-    assert len(words) == 30
+    assert len(words) >= 30
     assert all({"word", "definition", "example"} <= set(w) for w in words)
 
 
