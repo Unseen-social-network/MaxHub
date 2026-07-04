@@ -1,3 +1,5 @@
+name: maxhub-prod
+
 services:
   bot:
     image: ghcr.io/unseen-social-network/maxhub:${IMAGE_TAG}

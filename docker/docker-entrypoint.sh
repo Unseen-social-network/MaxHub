@@ -2,4 +2,4 @@
 set -e
 
 alembic upgrade head
-exec python -m app.main
+exec python -m bot

@@ -38,7 +38,7 @@ RUN groupadd --system app \
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /app /app
-COPY --chown=app:app docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY --chown=app:app docker/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 
 USER app

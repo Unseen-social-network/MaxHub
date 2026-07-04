@@ -8,6 +8,6 @@ __pycache__
 .env
 docs
 tests
-alembic/versions/__pycache__
+migrations/versions/__pycache__
 .idea
 .claude
