@@ -33,6 +33,10 @@ class BroadcastRequest(BaseModel):
     text: str
 
 
+class TodoCreateRequest(BaseModel):
+    text: str
+
+
 def build_miniapp_router(
     sessionmaker: async_sessionmaker[AsyncSession],
     limiter: RateLimitedBot,
@@ -73,6 +77,27 @@ def build_miniapp_router(
                 for todo in todos
             ]
         }
+
+    @router.post("/api/todos")
+    async def add_todo(
+        payload: TodoCreateRequest, x_init_data: str | None = Header(default=None)
+    ) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        text = payload.text.strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Текст дела пуст")
+
+        created_by = init_data.user.id if init_data.user else 0
+        async with sessionmaker() as session:
+            todo = await TodoRepo(session).add(
+                init_data.chat.id, text, created_by=created_by
+            )
+            await session.commit()
+
+        return {"id": todo.id, "text": todo.text, "is_done": todo.is_done}
 
     @router.get("/api/word")
     async def get_word(x_init_data: str | None = Header(default=None)) -> dict:

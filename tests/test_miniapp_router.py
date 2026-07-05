@@ -79,6 +79,38 @@ async def test_get_todos_returns_chat_scoped_list(session, sessionmaker):
     assert todos[0]["is_done"] is False
 
 
+async def test_add_todo_creates_item_scoped_to_chat(session, sessionmaker):
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.post(
+            "/miniapp/api/todos", headers=headers, json={"text": "купить хлеб"}
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["text"] == "купить хлеб"
+    assert body["is_done"] is False
+
+    todos = await TodoRepo(session).list_for_chat(100)
+    assert len(todos) == 1
+    assert todos[0].text == "купить хлеб"
+    assert todos[0].created_by == 1
+
+
+async def test_add_todo_rejects_empty_text(sessionmaker):
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.post(
+            "/miniapp/api/todos", headers=headers, json={"text": "   "}
+        )
+
+    assert response.status_code == 400
+
+
 async def test_get_todos_rejects_missing_init_data(sessionmaker):
     app = _make_app(sessionmaker, FakeLimiter())
 

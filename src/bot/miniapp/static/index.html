@@ -76,6 +76,14 @@
       padding: 10px;
       resize: vertical;
     }
+    input[type="text"] {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 10px;
+    }
     .word-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
     .word-example { color: var(--muted); font-style: italic; margin-top: 8px; }
     .error { color: var(--danger); font-size: 14px; margin-top: 8px; }
@@ -89,6 +97,11 @@
     <section id="todo-section">
       <h2>Список дел</h2>
       <ul id="todo-list"><li class="empty">Загрузка…</li></ul>
+      <div class="row" style="margin-top: 12px; gap: 8px;">
+        <input id="todo-input" type="text" placeholder="Новое дело…" style="flex: 1;" />
+        <button id="todo-add">Добавить</button>
+      </div>
+      <div id="todo-error" class="error"></div>
     </section>
 
     <section id="word-section">
@@ -147,6 +160,28 @@
         list.innerHTML = `<li class="error">${escapeHtml(err.message)}</li>`;
       }
     }
+
+    document.getElementById("todo-add").addEventListener("click", async () => {
+      const input = document.getElementById("todo-input");
+      const error = document.getElementById("todo-error");
+      const button = document.getElementById("todo-add");
+      const text = input.value.trim();
+      if (!text) {
+        error.textContent = "Введите текст дела";
+        return;
+      }
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        await api("api/todos", { method: "POST", body: JSON.stringify({ text }) });
+        input.value = "";
+        await loadTodos();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
 
     let wordSubscribed = false;
 
