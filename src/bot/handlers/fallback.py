@@ -22,16 +22,16 @@ KNOWN_COMMANDS = [
 ]
 
 
-class LooksLikeCommand(BaseFilter):
+class IsUnrecognizedText(BaseFilter):
     async def __call__(self, event: object) -> bool:
         if not isinstance(event, MessageCreated):
             return False
         body = event.message.body
         text = body.text if body else None
-        return bool(text) and text.strip().startswith("/")
+        return bool(text) and bool(text.strip())
 
 
-@fallback_router.message_created(LooksLikeCommand())
+@fallback_router.message_created(IsUnrecognizedText())
 async def handle_unknown_command(
     event: MessageCreated, limiter: RateLimitedBot
 ) -> None:
