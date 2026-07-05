@@ -21,8 +21,7 @@ HELP_TEXT = (
     "/word unsub — отписаться\n\n"
     "🖼 Конвертер изображений:\n"
     "Пришлите картинку — бот предложит форматы для конвертации.\n\n"
-    "/help — это сообщение\n"
-    "/app — открыть мини-приложение"
+    "/help — это сообщение"
 )
 
 
@@ -45,11 +44,19 @@ async def handle_open_app(event: MessageCreated, limiter: RateLimitedBot) -> Non
         return
 
     bot_me = event._ensure_bot().me  # noqa: SLF001
+    if bot_me is None or not bot_me.username:
+        await limiter.send_message(
+            chat_id=chat_id,
+            text="Мини-приложение временно недоступно, попробуйте позже.",
+        )
+        return
+
     keyboard = InlineKeyboardBuilder()
     keyboard.add(
         OpenAppButton(
             text="📱 Открыть приложение",
-            contact_id=bot_me.user_id if bot_me else None,
+            web_app=bot_me.username,
+            contact_id=bot_me.user_id,
         )
     )
     await limiter.send_message(

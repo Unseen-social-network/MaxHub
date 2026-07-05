@@ -29,6 +29,15 @@ def _make_event(chat_id: int = 100) -> MessageCreated:
 class FakeBot:
     class _Me:
         user_id = 777
+        username = "maxhub_bot"
+
+    me = _Me()
+
+
+class FakeBotWithoutUsername:
+    class _Me:
+        user_id = 777
+        username = None
 
     me = _Me()
 
@@ -60,4 +69,20 @@ async def test_open_app_sends_open_app_button():
     sent = limiter.sent[0]
     assert sent["chat_id"] == 300
     button = sent["attachments"][0].payload.buttons[0][0]
+    assert button.web_app == "maxhub_bot"
     assert button.contact_id == 777
+
+
+async def test_open_app_without_bot_username_sends_fallback_text():
+    limiter = FakeLimiter()
+    event = _make_event(chat_id=300)
+    event.bot = FakeBotWithoutUsername()
+
+    await handle_open_app(event, limiter)
+
+    assert limiter.sent == [
+        {
+            "chat_id": 300,
+            "text": "Мини-приложение временно недоступно, попробуйте позже.",
+        }
+    ]
