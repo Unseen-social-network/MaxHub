@@ -111,6 +111,58 @@ async def test_add_todo_rejects_empty_text(sessionmaker):
     assert response.status_code == 400
 
 
+async def test_mark_todo_done_hides_it_from_scoped_list(session, sessionmaker):
+    todo = await TodoRepo(session).add(chat_id=100, text="дело", created_by=1)
+    await session.commit()
+
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.post(
+            f"/miniapp/api/todos/{todo.id}/done", headers=headers
+        )
+
+    assert response.status_code == 200
+    session.expire_all()
+    todos = await TodoRepo(session).list_for_chat(100)
+    assert todos[0].is_done is True
+
+
+async def test_mark_todo_done_rejects_unknown_id(sessionmaker):
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.post("/miniapp/api/todos/999/done", headers=headers)
+
+    assert response.status_code == 404
+
+
+async def test_delete_todo_removes_item(session, sessionmaker):
+    todo = await TodoRepo(session).add(chat_id=100, text="дело", created_by=1)
+    await session.commit()
+
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.delete(f"/miniapp/api/todos/{todo.id}", headers=headers)
+
+    assert response.status_code == 200
+    assert await TodoRepo(session).list_for_chat(100) == []
+
+
+async def test_delete_todo_rejects_unknown_id(sessionmaker):
+    app = _make_app(sessionmaker, FakeLimiter())
+    headers = {"X-Init-Data": _init_data_header(user_id=1, chat_id=100)}
+
+    async with _client(app) as client:
+        response = await client.delete("/miniapp/api/todos/999", headers=headers)
+
+    assert response.status_code == 404
+
+
 async def test_get_todos_rejects_missing_init_data(sessionmaker):
     app = _make_app(sessionmaker, FakeLimiter())
 

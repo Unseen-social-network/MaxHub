@@ -99,6 +99,40 @@ def build_miniapp_router(
 
         return {"id": todo.id, "text": todo.text, "is_done": todo.is_done}
 
+    @router.post("/api/todos/{todo_id}/done")
+    async def mark_todo_done(
+        todo_id: int, x_init_data: str | None = Header(default=None)
+    ) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        async with sessionmaker() as session:
+            found = await TodoRepo(session).mark_done(init_data.chat.id, todo_id)
+            await session.commit()
+
+        if not found:
+            raise HTTPException(status_code=404, detail="Дело не найдено")
+
+        return {"status": "ok"}
+
+    @router.delete("/api/todos/{todo_id}")
+    async def delete_todo(
+        todo_id: int, x_init_data: str | None = Header(default=None)
+    ) -> dict:
+        init_data = _extract_init_data(x_init_data)
+        if init_data.chat is None:
+            raise HTTPException(status_code=400, detail="Нет контекста чата")
+
+        async with sessionmaker() as session:
+            found = await TodoRepo(session).delete(init_data.chat.id, todo_id)
+            await session.commit()
+
+        if not found:
+            raise HTTPException(status_code=404, detail="Дело не найдено")
+
+        return {"status": "ok"}
+
     @router.get("/api/word")
     async def get_word(x_init_data: str | None = Header(default=None)) -> dict:
         init_data = _extract_init_data(x_init_data)

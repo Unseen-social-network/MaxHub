@@ -53,7 +53,14 @@
     }
     li:last-child { border-bottom: none; }
     li.done { color: var(--muted); text-decoration: line-through; }
+    li .todo-text { flex: 1; }
     .empty { color: var(--muted); font-size: 14px; }
+    .icon-btn {
+      padding: 4px 8px;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
     button {
       font: inherit;
       border: none;
@@ -146,20 +153,48 @@
       const list = document.getElementById("todo-list");
       try {
         const data = await api("api/todos");
-        if (data.todos.length === 0) {
+        const pending = data.todos.filter((todo) => !todo.is_done);
+        if (pending.length === 0) {
           list.innerHTML = '<li class="empty">Список дел пуст</li>';
           return;
         }
-        list.innerHTML = data.todos
+        list.innerHTML = pending
           .map(
-            (todo) =>
-              `<li class="${todo.is_done ? "done" : ""}">${todo.is_done ? "✅" : "⬜"} ${escapeHtml(todo.text)}</li>`
+            (todo) => `
+              <li data-id="${todo.id}">
+                <span class="todo-text">${escapeHtml(todo.text)}</span>
+                <button class="icon-btn todo-done" title="Готово">✅</button>
+                <button class="icon-btn todo-delete" title="Удалить">🗑</button>
+              </li>
+            `
           )
           .join("");
       } catch (err) {
         list.innerHTML = `<li class="error">${escapeHtml(err.message)}</li>`;
       }
     }
+
+    document.getElementById("todo-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("button.todo-done, button.todo-delete");
+      if (!button) return;
+      const li = button.closest("li[data-id]");
+      if (!li) return;
+      const todoId = li.dataset.id;
+      const error = document.getElementById("todo-error");
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        if (button.classList.contains("todo-done")) {
+          await api(`api/todos/${todoId}/done`, { method: "POST" });
+        } else {
+          await api(`api/todos/${todoId}`, { method: "DELETE" });
+        }
+        await loadTodos();
+      } catch (err) {
+        error.textContent = err.message;
+        button.disabled = false;
+      }
+    });
 
     document.getElementById("todo-add").addEventListener("click", async () => {
       const input = document.getElementById("todo-input");
