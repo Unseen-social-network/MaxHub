@@ -1,6 +1,6 @@
 from maxapi import Router
 from maxapi.filters.command import Command, CommandStart
-from maxapi.types.attachments.buttons import OpenAppButton
+from maxapi.types.attachments.buttons import ClipboardButton, OpenAppButton
 from maxapi.types.updates.message_created import MessageCreated
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 
@@ -25,10 +25,33 @@ HELP_TEXT = (
 )
 
 
+def _open_app_button(event: MessageCreated) -> OpenAppButton | None:
+    bot_me = event._ensure_bot().me  # noqa: SLF001
+    if bot_me is None or not bot_me.username:
+        return None
+    return OpenAppButton(
+        text="📱 Открыть приложение",
+        web_app=bot_me.username,
+        contact_id=bot_me.user_id,
+    )
+
+
 @common_router.message_created(CommandStart())
 async def handle_start(event: MessageCreated, limiter: RateLimitedBot) -> None:
     chat_id, _user_id = event.get_ids()
-    await limiter.send_message(chat_id=chat_id, text=HELP_TEXT)
+
+    keyboard = InlineKeyboardBuilder()
+    keyboard.row(
+        ClipboardButton(text="📝 Список дел", payload="/todo"),
+        ClipboardButton(text="📖 Слово дня", payload="/word"),
+    )
+    app_button = _open_app_button(event)
+    if app_button is not None:
+        keyboard.row(app_button)
+
+    await limiter.send_message(
+        chat_id=chat_id, text=HELP_TEXT, attachments=[keyboard.as_markup()]
+    )
 
 
 @common_router.message_created(Command("help"))
@@ -43,8 +66,8 @@ async def handle_open_app(event: MessageCreated, limiter: RateLimitedBot) -> Non
     if chat_id is None:
         return
 
-    bot_me = event._ensure_bot().me  # noqa: SLF001
-    if bot_me is None or not bot_me.username:
+    app_button = _open_app_button(event)
+    if app_button is None:
         await limiter.send_message(
             chat_id=chat_id,
             text="Мини-приложение временно недоступно, попробуйте позже.",
@@ -52,13 +75,7 @@ async def handle_open_app(event: MessageCreated, limiter: RateLimitedBot) -> Non
         return
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.add(
-        OpenAppButton(
-            text="📱 Открыть приложение",
-            web_app=bot_me.username,
-            contact_id=bot_me.user_id,
-        )
-    )
+    keyboard.add(app_button)
     await limiter.send_message(
         chat_id=chat_id,
         text="Мини-приложение MaxHub: список дел, слово дня и рассылка для админов.",

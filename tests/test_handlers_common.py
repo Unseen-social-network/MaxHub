@@ -42,12 +42,39 @@ class FakeBotWithoutUsername:
     me = _Me()
 
 
-async def test_start_sends_help_text():
+async def test_start_sends_help_text_with_action_buttons():
     limiter = FakeLimiter()
+    event = _make_event(chat_id=100)
+    event.bot = FakeBot()
 
-    await handle_start(_make_event(chat_id=100), limiter)
+    await handle_start(event, limiter)
 
-    assert limiter.sent == [{"chat_id": 100, "text": HELP_TEXT}]
+    assert len(limiter.sent) == 1
+    sent = limiter.sent[0]
+    assert sent["chat_id"] == 100
+    assert sent["text"] == HELP_TEXT
+    buttons = [
+        button for row in sent["attachments"][0].payload.buttons for button in row
+    ]
+    assert {getattr(button, "payload", None) for button in buttons} >= {
+        "/todo",
+        "/word",
+    }
+
+
+async def test_start_without_bot_username_skips_open_app_button():
+    limiter = FakeLimiter()
+    event = _make_event(chat_id=100)
+    event.bot = FakeBotWithoutUsername()
+
+    await handle_start(event, limiter)
+
+    buttons = [
+        button
+        for row in limiter.sent[0]["attachments"][0].payload.buttons
+        for button in row
+    ]
+    assert len(buttons) == 2
 
 
 async def test_help_sends_help_text():
