@@ -62,7 +62,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          port: ${{ secrets.SSH_PORT || '22' }}
           source: "docker/docker-compose.prod.nginx.yml"
           target: ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
           strip_components: 1
@@ -73,7 +73,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          port: ${{ secrets.SSH_PORT || '22' }}
           script: |
             cd ${{ secrets.DEPLOY_PATH || '/opt/max-bot' }}
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${{ env.TAG }}/" .env
