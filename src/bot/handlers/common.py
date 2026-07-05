@@ -1,6 +1,7 @@
 from maxapi import Router
 from maxapi.filters.command import Command, CommandStart
 from maxapi.types.attachments.buttons import ClipboardButton, OpenAppButton
+from maxapi.types.updates.bot_started import BotStarted
 from maxapi.types.updates.message_created import MessageCreated
 from maxapi.utils.inline_keyboard import InlineKeyboardBuilder
 
@@ -25,7 +26,7 @@ HELP_TEXT = (
 )
 
 
-def _open_app_button(event: MessageCreated) -> OpenAppButton | None:
+def _open_app_button(event: MessageCreated | BotStarted) -> OpenAppButton | None:
     bot_me = event._ensure_bot().me  # noqa: SLF001
     if bot_me is None or not bot_me.username:
         return None
@@ -36,8 +37,9 @@ def _open_app_button(event: MessageCreated) -> OpenAppButton | None:
     )
 
 
-@common_router.message_created(CommandStart())
-async def handle_start(event: MessageCreated, limiter: RateLimitedBot) -> None:
+async def _send_welcome(
+    event: MessageCreated | BotStarted, limiter: RateLimitedBot
+) -> None:
     chat_id, _user_id = event.get_ids()
 
     keyboard = InlineKeyboardBuilder()
@@ -52,6 +54,16 @@ async def handle_start(event: MessageCreated, limiter: RateLimitedBot) -> None:
     await limiter.send_message(
         chat_id=chat_id, text=HELP_TEXT, attachments=[keyboard.as_markup()]
     )
+
+
+@common_router.message_created(CommandStart())
+async def handle_start(event: MessageCreated, limiter: RateLimitedBot) -> None:
+    await _send_welcome(event, limiter)
+
+
+@common_router.bot_started()
+async def handle_bot_started(event: BotStarted, limiter: RateLimitedBot) -> None:
+    await _send_welcome(event, limiter)
 
 
 @common_router.message_created(Command("help"))

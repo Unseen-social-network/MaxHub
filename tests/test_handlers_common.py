@@ -1,9 +1,16 @@
 from maxapi.enums.chat_type import ChatType
 from maxapi.types.message import Message, Recipient
+from maxapi.types.updates.bot_started import BotStarted
 from maxapi.types.updates.message_created import MessageCreated
 from maxapi.types.users import User as MaxUser
 
-from bot.handlers.common import HELP_TEXT, handle_help, handle_open_app, handle_start
+from bot.handlers.common import (
+    HELP_TEXT,
+    handle_bot_started,
+    handle_help,
+    handle_open_app,
+    handle_start,
+)
 
 
 class FakeLimiter:
@@ -75,6 +82,30 @@ async def test_start_without_bot_username_skips_open_app_button():
         for button in row
     ]
     assert len(buttons) == 2
+
+
+async def test_bot_started_sends_help_text_with_action_buttons():
+    limiter = FakeLimiter()
+    event = BotStarted(
+        chat_id=100,
+        user=MaxUser(user_id=1, first_name="Test", is_bot=False, last_activity_time=0),
+        timestamp=0,
+    )
+    event.bot = FakeBot()
+
+    await handle_bot_started(event, limiter)
+
+    assert len(limiter.sent) == 1
+    sent = limiter.sent[0]
+    assert sent["chat_id"] == 100
+    assert sent["text"] == HELP_TEXT
+    buttons = [
+        button for row in sent["attachments"][0].payload.buttons for button in row
+    ]
+    assert {getattr(button, "payload", None) for button in buttons} >= {
+        "/todo",
+        "/word",
+    }
 
 
 async def test_help_sends_help_text():
