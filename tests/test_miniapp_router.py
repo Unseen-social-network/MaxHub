@@ -18,8 +18,11 @@ BOT_TOKEN = "test-bot-token"
 
 def _sign(params: dict) -> str:
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
+    secret_key = hmac.new(
+        b"WebAppData", BOT_TOKEN.encode("utf-8"), hashlib.sha256
+    ).digest()
     return hmac.new(
-        BOT_TOKEN.encode("utf-8"), data_check_string.encode("utf-8"), hashlib.sha256
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
 

@@ -36,10 +36,11 @@ class InitData:
 def verify_init_data(raw: str, bot_token: str, max_age_seconds: int = 3600) -> InitData:
     """Проверяет подпись initData из MAX Bridge.
 
-    Формула из документации dev.max.ru/docs/webapps/bridge: HMAC_SHA256 от
-    отсортированных по алфавиту пар key=value (кроме hash и version),
-    объединённых через "\n", ключ — токен бота напрямую (без промежуточного
-    secret key, в отличие от Telegram WebApp).
+    Формула из dev.max.ru/docs/webapps/validation (двухшаговый HMAC, как в
+    Telegram WebApp): secret_key = HMAC_SHA256("WebAppData", bot_token),
+    hash = HMAC_SHA256(secret_key, launch_params), где launch_params — пары
+    key=value из initData (кроме hash), отсортированные по алфавиту и
+    объединённые через "\n".
     """
     pairs = dict(parse_qsl(raw, keep_blank_values=True))
     received_hash = pairs.pop("hash", None)
@@ -51,8 +52,11 @@ def verify_init_data(raw: str, bot_token: str, max_age_seconds: int = 3600) -> I
     data_check_string = "\n".join(
         f"{key}={value}" for key, value in sorted(pairs.items())
     )
+    secret_key = hmac.new(
+        b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256
+    ).digest()
     computed_hash = hmac.new(
-        bot_token.encode("utf-8"), data_check_string.encode("utf-8"), hashlib.sha256
+        secret_key, data_check_string.encode("utf-8"), hashlib.sha256
     ).hexdigest()
 
     if not hmac.compare_digest(computed_hash, received_hash):
