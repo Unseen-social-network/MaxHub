@@ -151,6 +151,7 @@ async def test_bare_todo_starts_fsm_with_choice_buttons(session):
         "todo_fsm:list",
         "todo_fsm:done",
         "todo_fsm:del",
+        "/help",
     }
 
 

@@ -3,7 +3,7 @@ from maxapi.context.base import BaseContext
 from maxapi.context.state_machine import State, StatesGroup
 from maxapi.filters.command import Command
 from maxapi.filters.state import StateFilter
-from maxapi.types.attachments.buttons import CallbackButton
+from maxapi.types.attachments.buttons import CallbackButton, ClipboardButton
 from maxapi.types.attachments.buttons.attachment_button import AttachmentButton
 from maxapi.types.updates.message_callback import MessageCallback, MessageForCallback
 from maxapi.types.updates.message_created import MessageCreated
@@ -23,16 +23,21 @@ class TodoStates(StatesGroup):
     waiting_del_number = State()
 
 
+def _back_to_commands_button() -> ClipboardButton:
+    return ClipboardButton(text="🏠 К командам", payload="/help")
+
+
 async def _render_todo_list(
     chat_id: int, session: AsyncSession
 ) -> tuple[str, AttachmentButton | None]:
     todos = await TodoRepo(session).list_for_chat(chat_id)
+    keyboard = InlineKeyboardBuilder()
 
     if not todos:
-        return "Список дел пуст. Добавьте: /todo add <текст>", None
+        keyboard.row(_back_to_commands_button())
+        return "Список дел пуст. Добавьте: /todo add <текст>", keyboard.as_markup()
 
     lines = []
-    keyboard = InlineKeyboardBuilder()
     for i, todo in enumerate(todos, start=1):
         mark = "✅" if todo.is_done else "⬜"
         lines.append(f"{i}. {mark} {todo.text}")
@@ -40,6 +45,7 @@ async def _render_todo_list(
             CallbackButton(text=f"✅ {i}", payload=f"todo:done:{todo.id}"),
             CallbackButton(text=f"🗑 {i}", payload=f"todo:del:{todo.id}"),
         )
+    keyboard.row(_back_to_commands_button())
 
     return "\n".join(lines), keyboard.as_markup()
 
@@ -54,6 +60,7 @@ def _fsm_choice_keyboard() -> AttachmentButton:
         CallbackButton(text="✅ Отметить готовым", payload="todo_fsm:done"),
         CallbackButton(text="🗑 Удалить", payload="todo_fsm:del"),
     )
+    keyboard.row(_back_to_commands_button())
     return keyboard.as_markup()
 
 
