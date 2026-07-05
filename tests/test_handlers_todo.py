@@ -1,12 +1,20 @@
+from maxapi.context.context import MemoryContext
 from maxapi.enums.chat_type import ChatType
 from maxapi.types.callback import Callback
-from maxapi.types.message import Message, Recipient
+from maxapi.types.message import Message, MessageBody, Recipient
 from maxapi.types.updates.message_callback import MessageCallback
 from maxapi.types.updates.message_created import MessageCreated
 from maxapi.types.users import User as MaxUser
 
 from bot.db.repositories.todos import TodoRepo
-from bot.handlers.todo import handle_todo, handle_todo_callback
+from bot.handlers.todo import (
+    TodoStates,
+    handle_todo,
+    handle_todo_callback,
+    handle_todo_fsm_add_text,
+    handle_todo_fsm_choice,
+    handle_todo_fsm_done_number,
+)
 
 
 class FakeLimiter:
@@ -23,7 +31,9 @@ class FakeLimiter:
         return None
 
 
-def _make_message_event(chat_id: int, user_id: int = 1) -> MessageCreated:
+def _make_message_event(
+    chat_id: int, user_id: int = 1, text: str | None = None
+) -> MessageCreated:
     message = Message(
         sender=MaxUser(
             user_id=user_id, first_name="T", is_bot=False, last_activity_time=0
@@ -31,6 +41,8 @@ def _make_message_event(chat_id: int, user_id: int = 1) -> MessageCreated:
         recipient=Recipient(user_id=user_id, chat_id=chat_id, chat_type=ChatType.CHAT),
         timestamp=0,
     )
+    if text is not None:
+        message.body = MessageBody(mid="m1", seq=1, text=text)
     return MessageCreated(message=message, timestamp=0)
 
 
@@ -57,11 +69,12 @@ def _make_callback_event(
 
 async def test_add_then_list_shows_numbered_items(session):
     limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
 
     await handle_todo(
-        _make_message_event(100), ["add", "купить", "хлеб"], session, limiter
+        _make_message_event(100), ["add", "купить", "хлеб"], session, context, limiter
     )
-    await handle_todo(_make_message_event(100), ["list"], session, limiter)
+    await handle_todo(_make_message_event(100), ["list"], session, context, limiter)
 
     assert "Добавлено: купить хлеб" in limiter.sent[0]["text"]
     assert "1. ⬜ купить хлеб" in limiter.sent[1]["text"]
@@ -69,9 +82,14 @@ async def test_add_then_list_shows_numbered_items(session):
 
 async def test_done_by_position_marks_item(session):
     limiter = FakeLimiter()
-    await handle_todo(_make_message_event(100), ["add", "дело"], session, limiter)
+    context = MemoryContext(chat_id=100, user_id=1)
+    await handle_todo(
+        _make_message_event(100), ["add", "дело"], session, context, limiter
+    )
 
-    await handle_todo(_make_message_event(100), ["done", "1"], session, limiter)
+    await handle_todo(
+        _make_message_event(100), ["done", "1"], session, context, limiter
+    )
 
     todos = await TodoRepo(session).list_for_chat(100)
     assert todos[0].is_done is True
@@ -80,9 +98,12 @@ async def test_done_by_position_marks_item(session):
 
 async def test_del_by_position_removes_item(session):
     limiter = FakeLimiter()
-    await handle_todo(_make_message_event(100), ["add", "дело"], session, limiter)
+    context = MemoryContext(chat_id=100, user_id=1)
+    await handle_todo(
+        _make_message_event(100), ["add", "дело"], session, context, limiter
+    )
 
-    await handle_todo(_make_message_event(100), ["del", "1"], session, limiter)
+    await handle_todo(_make_message_event(100), ["del", "1"], session, context, limiter)
 
     todos = await TodoRepo(session).list_for_chat(100)
     assert todos == []
@@ -105,7 +126,107 @@ async def test_callback_done_marks_item_and_edits_message(session):
 
 async def test_add_without_text_shows_usage(session):
     limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
 
-    await handle_todo(_make_message_event(100), ["add"], session, limiter)
+    await handle_todo(_make_message_event(100), ["add"], session, context, limiter)
 
     assert "Укажите текст" in limiter.sent[0]["text"]
+
+
+async def test_bare_todo_starts_fsm_with_choice_buttons(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+
+    await handle_todo(_make_message_event(100), [], session, context, limiter)
+
+    assert await context.get_state() == TodoStates.choosing_action
+    buttons = [
+        button
+        for row in limiter.sent[0]["attachments"][0].payload.buttons
+        for button in row
+    ]
+    payloads = {button.payload for button in buttons}
+    assert payloads == {
+        "todo_fsm:add",
+        "todo_fsm:list",
+        "todo_fsm:done",
+        "todo_fsm:del",
+    }
+
+
+async def test_fsm_choice_list_renders_list_and_clears_state(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await context.set_state(TodoStates.choosing_action)
+    await TodoRepo(session).add(100, "дело", created_by=1)
+    await session.commit()
+
+    event = _make_callback_event(100, "todo_fsm:list")
+    await handle_todo_fsm_choice(event, session, context, limiter)
+
+    assert await context.get_state() is None
+    assert "дело" in limiter.calls[0]["message"].text
+
+
+async def test_fsm_choice_add_prompts_for_text(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await context.set_state(TodoStates.choosing_action)
+
+    event = _make_callback_event(100, "todo_fsm:add")
+    await handle_todo_fsm_choice(event, session, context, limiter)
+
+    assert await context.get_state() == TodoStates.waiting_add_text
+
+
+async def test_fsm_add_text_creates_todo_and_clears_state(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await context.set_state(TodoStates.waiting_add_text)
+
+    event = _make_message_event(100, text="купить молоко")
+    await handle_todo_fsm_add_text(event, session, context, limiter)
+
+    assert await context.get_state() is None
+    todos = await TodoRepo(session).list_for_chat(100)
+    assert todos[0].text == "купить молоко"
+
+
+async def test_fsm_choice_done_with_empty_list_clears_state(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await context.set_state(TodoStates.choosing_action)
+
+    event = _make_callback_event(100, "todo_fsm:done")
+    await handle_todo_fsm_choice(event, session, context, limiter)
+
+    assert await context.get_state() is None
+    assert "пуст" in limiter.calls[0]["message"].text.lower()
+
+
+async def test_fsm_choice_done_with_items_prompts_for_number(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await context.set_state(TodoStates.choosing_action)
+    await TodoRepo(session).add(100, "дело", created_by=1)
+    await session.commit()
+
+    event = _make_callback_event(100, "todo_fsm:done")
+    await handle_todo_fsm_choice(event, session, context, limiter)
+
+    assert await context.get_state() == TodoStates.waiting_done_number
+
+
+async def test_fsm_done_number_marks_item_and_clears_state(session):
+    limiter = FakeLimiter()
+    context = MemoryContext(chat_id=100, user_id=1)
+    await TodoRepo(session).add(100, "дело", created_by=1)
+    await session.commit()
+    await context.set_state(TodoStates.waiting_done_number)
+
+    event = _make_message_event(100, text="1")
+    await handle_todo_fsm_done_number(event, session, context, limiter)
+
+    assert await context.get_state() is None
+    todos = await TodoRepo(session).list_for_chat(100)
+    assert todos[0].is_done is True
