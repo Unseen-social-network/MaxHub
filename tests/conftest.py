@@ -32,6 +32,12 @@ async def session(sessionmaker: async_sessionmaker[AsyncSession]):
 @pytest.fixture(autouse=True)
 async def _clean_tables(session: AsyncSession):
     yield
-    for table in ("todos", "word_subscriptions", "broadcasts", "users"):
+    for table in (
+        "todos",
+        "word_subscriptions",
+        "broadcasts",
+        "users",
+        "drink_reviews",
+    ):
         await session.execute(text(f"TRUNCATE TABLE {table} CASCADE"))
     await session.commit()

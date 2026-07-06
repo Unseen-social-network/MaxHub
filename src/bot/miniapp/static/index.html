@@ -83,7 +83,7 @@
       padding: 10px;
       resize: vertical;
     }
-    input[type="text"] {
+    input[type="text"], select {
       font: inherit;
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -91,6 +91,18 @@
       color: var(--text);
       padding: 10px;
     }
+    label.checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+    .drink-note {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    .drink-meta { flex: 1; }
     .word-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
     .word-example { color: var(--muted); font-style: italic; margin-top: 8px; }
     .error { color: var(--danger); font-size: 14px; margin-top: 8px; }
@@ -117,6 +129,80 @@
       <div class="row" style="margin-top: 12px;">
         <button id="word-toggle" class="secondary" disabled>…</button>
       </div>
+    </section>
+
+    <section id="drinks-section">
+      <h2>Напитки</h2>
+
+      <div class="row" style="gap: 8px; flex-wrap: wrap;">
+        <input id="drinks-search" type="text" placeholder="Поиск…" style="flex: 1; min-width: 120px;" />
+        <button id="drinks-search-btn" class="secondary">Найти</button>
+      </div>
+
+      <div class="row" style="gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+        <select id="drinks-category-filter" style="flex: 1;">
+          <option value="">Все категории</option>
+        </select>
+        <select id="drinks-sort" style="flex: 1;">
+          <option value="created_at">По дате</option>
+          <option value="rating">По оценке</option>
+          <option value="name">По названию</option>
+          <option value="favorite">Сначала избранные</option>
+        </select>
+        <button id="drinks-order-toggle" class="secondary" title="Порядок сортировки">⬇</button>
+      </div>
+
+      <label class="checkbox-row" style="margin-top: 8px;">
+        <input id="drinks-favorite-filter" type="checkbox" />
+        Только избранное
+      </label>
+
+      <ul id="drinks-list" style="margin-top: 12px;"><li class="empty">Загрузка…</li></ul>
+      <div id="drinks-error" class="error"></div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;" />
+
+      <h2>Добавить рецензию</h2>
+      <input
+        id="drink-category"
+        list="drink-category-options"
+        type="text"
+        placeholder="Категория (вино, пиво, чай…)"
+        style="width: 100%; margin-bottom: 8px;"
+      />
+      <datalist id="drink-category-options"></datalist>
+      <input
+        id="drink-name"
+        type="text"
+        placeholder="Название напитка"
+        style="width: 100%; margin-bottom: 8px;"
+      />
+      <textarea id="drink-note" placeholder="Описание/заметка (необязательно)"></textarea>
+      <div class="row" style="margin-top: 8px; justify-content: flex-start; gap: 16px;">
+        <label class="checkbox-row">
+          Оценка:
+          <select id="drink-rating">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10" selected>10</option>
+          </select>
+        </label>
+        <label class="checkbox-row">
+          <input id="drink-favorite" type="checkbox" />
+          Фаворит
+        </label>
+      </div>
+      <div class="row" style="margin-top: 12px;">
+        <button id="drink-add">Добавить рецензию</button>
+      </div>
+      <div id="drink-add-error" class="error"></div>
     </section>
 
     <section id="broadcast-section" hidden>
@@ -294,9 +380,176 @@
       return div.innerHTML;
     }
 
+    const drinksView = {
+      search: "",
+      category: "",
+      favorite: false,
+      sort: "created_at",
+      order: "desc",
+    };
+
+    async function loadDrinkCategories() {
+      try {
+        const data = await api("api/drinks/categories");
+        const select = document.getElementById("drinks-category-filter");
+        const datalist = document.getElementById("drink-category-options");
+        const current = select.value;
+        select.innerHTML =
+          '<option value="">Все категории</option>' +
+          data.categories
+            .map((c) => `<option value="${escapeHtml(c.value)}">${escapeHtml(c.label)}</option>`)
+            .join("");
+        select.value = current;
+        datalist.innerHTML = data.categories
+          .map((c) => `<option value="${escapeHtml(c.label)}"></option>`)
+          .join("");
+      } catch (err) {
+        // Список категорий — подсказка, а не критичная функция.
+      }
+    }
+
+    async function loadDrinks() {
+      const list = document.getElementById("drinks-list");
+      const error = document.getElementById("drinks-error");
+      error.textContent = "";
+      try {
+        const params = new URLSearchParams();
+        if (drinksView.search) params.set("search", drinksView.search);
+        if (drinksView.category) params.set("category", drinksView.category);
+        if (drinksView.favorite) params.set("favorite", "true");
+        params.set("sort", drinksView.sort);
+        params.set("order", drinksView.order);
+
+        const data = await api(`api/drinks?${params.toString()}`);
+        if (data.drinks.length === 0) {
+          list.innerHTML = '<li class="empty">Ничего не найдено</li>';
+          return;
+        }
+        list.innerHTML = data.drinks
+          .map(
+            (drink) => `
+              <li data-id="${drink.id}">
+                <div class="drink-meta">
+                  <div><strong>${escapeHtml(drink.name)}</strong> — ${escapeHtml(drink.category_display)} · ${drink.rating}/10</div>
+                  ${drink.note ? `<div class="drink-note">${escapeHtml(drink.note)}</div>` : ""}
+                </div>
+                <button class="icon-btn drink-fav" title="Фаворит">${drink.is_favorite ? "❤" : "🤍"}</button>
+                <button class="icon-btn drink-delete" title="Удалить">🗑</button>
+              </li>
+            `
+          )
+          .join("");
+      } catch (err) {
+        list.innerHTML = "";
+        error.textContent = err.message;
+      }
+    }
+
+    document.getElementById("drinks-list").addEventListener("click", async (event) => {
+      const button = event.target.closest("button.drink-fav, button.drink-delete");
+      if (!button) return;
+      const li = button.closest("li[data-id]");
+      if (!li) return;
+      const id = li.dataset.id;
+      const error = document.getElementById("drinks-error");
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        if (button.classList.contains("drink-fav")) {
+          const isFavorite = button.textContent.trim() === "❤";
+          await api(`api/drinks/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ is_favorite: !isFavorite }),
+          });
+        } else {
+          await api(`api/drinks/${id}`, { method: "DELETE" });
+        }
+        await loadDrinks();
+        await loadDrinkCategories();
+      } catch (err) {
+        error.textContent = err.message;
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("drinks-search-btn").addEventListener("click", () => {
+      drinksView.search = document.getElementById("drinks-search").value.trim();
+      loadDrinks();
+    });
+
+    document.getElementById("drinks-category-filter").addEventListener("change", (event) => {
+      drinksView.category = event.target.value;
+      loadDrinks();
+    });
+
+    document.getElementById("drinks-favorite-filter").addEventListener("change", (event) => {
+      drinksView.favorite = event.target.checked;
+      loadDrinks();
+    });
+
+    document.getElementById("drinks-sort").addEventListener("change", (event) => {
+      drinksView.sort = event.target.value;
+      loadDrinks();
+    });
+
+    document.getElementById("drinks-order-toggle").addEventListener("click", (event) => {
+      drinksView.order = drinksView.order === "desc" ? "asc" : "desc";
+      event.target.textContent = drinksView.order === "desc" ? "⬇" : "⬆";
+      loadDrinks();
+    });
+
+    document.getElementById("drink-add").addEventListener("click", async () => {
+      const categoryInput = document.getElementById("drink-category");
+      const nameInput = document.getElementById("drink-name");
+      const noteInput = document.getElementById("drink-note");
+      const ratingSelect = document.getElementById("drink-rating");
+      const favoriteInput = document.getElementById("drink-favorite");
+      const error = document.getElementById("drink-add-error");
+      const button = document.getElementById("drink-add");
+
+      const category = categoryInput.value.trim();
+      const name = nameInput.value.trim();
+      if (!category) {
+        error.textContent = "Укажите категорию";
+        return;
+      }
+      if (!name) {
+        error.textContent = "Укажите название";
+        return;
+      }
+
+      button.disabled = true;
+      error.textContent = "";
+      try {
+        await api("api/drinks", {
+          method: "POST",
+          body: JSON.stringify({
+            category,
+            name,
+            note: noteInput.value.trim(),
+            rating: Number(ratingSelect.value),
+            is_favorite: favoriteInput.checked,
+          }),
+        });
+        categoryInput.value = "";
+        nameInput.value = "";
+        noteInput.value = "";
+        ratingSelect.value = "10";
+        favoriteInput.checked = false;
+        await loadDrinks();
+        await loadDrinkCategories();
+      } catch (err) {
+        error.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
     loadTodos();
     loadWord();
     loadBroadcastPanel();
+    loadDrinkCategories();
+    loadDrinks();
   </script>
 </body>
 </html>

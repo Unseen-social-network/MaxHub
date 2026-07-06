@@ -22,6 +22,13 @@ HELP_TEXT = (
     "/word unsub — отписаться\n\n"
     "🖼 Конвертер изображений:\n"
     "Пришлите картинку — бот предложит форматы для конвертации.\n\n"
+    "🍹 Рецензии на напитки:\n"
+    "/drink add — добавить рецензию\n"
+    "/drink list — список с фильтрами и сортировкой\n"
+    "/drink search <текст> — поиск\n"
+    "/drink fav — только избранное\n"
+    "/drink del <id> — удалить\n"
+    "/drink help — подробная справка\n\n"
     "/help — это сообщение"
 )
 
@@ -47,6 +54,7 @@ async def _send_welcome(
         ClipboardButton(text="📝 Список дел", payload="/todo"),
         ClipboardButton(text="📖 Слово дня", payload="/word"),
     )
+    keyboard.row(ClipboardButton(text="🍹 Напитки", payload="/drink"))
     app_button = _open_app_button(event)
     if app_button is not None:
         keyboard.row(app_button)

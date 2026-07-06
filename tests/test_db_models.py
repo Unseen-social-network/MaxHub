@@ -1,9 +1,15 @@
-from bot.db.models import Base, Broadcast, Todo, User, WordSubscription
+from bot.db.models import Base, Broadcast, DrinkReview, Todo, User, WordSubscription
 
 
 def test_tables_registered_on_metadata():
     table_names = set(Base.metadata.tables.keys())
-    assert table_names == {"users", "todos", "word_subscriptions", "broadcasts"}
+    assert table_names == {
+        "users",
+        "todos",
+        "word_subscriptions",
+        "broadcasts",
+        "drink_reviews",
+    }
 
 
 def test_user_columns():
@@ -40,3 +46,20 @@ def test_broadcast_columns():
         "sent_count",
         "failed_count",
     }
+
+
+def test_drink_review_columns():
+    columns = {c.name for c in DrinkReview.__table__.columns}
+    assert columns == {
+        "id",
+        "chat_id",
+        "category",
+        "name",
+        "note",
+        "rating",
+        "is_favorite",
+        "created_by",
+        "created_at",
+        "updated_at",
+    }
+    assert DrinkReview.__table__.columns["chat_id"].index is True

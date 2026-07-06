@@ -81,7 +81,7 @@ async def test_start_without_bot_username_skips_open_app_button():
         for row in limiter.sent[0]["attachments"][0].payload.buttons
         for button in row
     ]
-    assert len(buttons) == 2
+    assert len(buttons) == 3
 
 
 async def test_bot_started_sends_help_text_with_action_buttons():

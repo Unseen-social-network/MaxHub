@@ -12,6 +12,7 @@ from bot.db.session import get_sessionmaker
 from bot.handlers.admin import admin_router
 from bot.handlers.common import common_router
 from bot.handlers.converter import converter_router
+from bot.handlers.drinks import drinks_router
 from bot.handlers.fallback import fallback_router
 from bot.handlers.todo import todo_router
 from bot.handlers.word_of_day import word_of_day_router
@@ -47,6 +48,7 @@ def build_dispatcher(bot: Bot) -> tuple[Dispatcher, RateLimitedBot]:
         todo_router,
         word_of_day_router,
         converter_router,
+        drinks_router,
         admin_router,
         fallback_router,
     )
