@@ -87,7 +87,10 @@ class RateLimitedBot:
             try:
                 return await method(**kwargs)
             except MaxApiError as exc:
-                if exc.code != 429 or attempt >= self._max_retries:
+                if (
+                    not self._is_retryable_api_error(exc)
+                    or attempt >= self._max_retries
+                ):
                     raise
             except MaxConnection:
                 if attempt >= self._max_retries:
@@ -97,3 +100,14 @@ class RateLimitedBot:
             delay += random.uniform(0, delay * 0.1)
             await asyncio.sleep(delay)
             attempt += 1
+
+    @staticmethod
+    def _is_retryable_api_error(exc: MaxApiError) -> bool:
+        if exc.code == 429:
+            return True
+        # maxapi ретраит "attachment.not.ready" сам внутри send_message/edit_message,
+        # но не внутри send_callback — без этого конвертер падает, если API ещё
+        # не успел обработать только что загруженный файл.
+        return (
+            isinstance(exc.raw, dict) and exc.raw.get("code") == "attachment.not.ready"
+        )

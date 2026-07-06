@@ -105,3 +105,16 @@ async def test_non_retryable_error_propagates_immediately():
         await limiter.call("flaky", limit_key=None)
 
     assert len(fake.calls) == 1
+
+
+async def test_retries_on_attachment_not_ready_then_succeeds():
+    fake = FakeBot(
+        fail_times=2,
+        fail_with=MaxApiError(code=400, raw={"code": "attachment.not.ready"}),
+    )
+    limiter = RateLimitedBot(fake, base_delay=0.01, max_delay=0.05)
+
+    result = await limiter.call("flaky", limit_key=None)
+
+    assert result == "recovered"
+    assert len(fake.calls) == 3
