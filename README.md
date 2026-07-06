@@ -69,6 +69,7 @@ cd /opt/maxbot
 
 ```bash
 BOT_TOKEN=...                # токен от MasterBot
+MAX_API_URL=https://platform-api2.max.ru  # хост API MAX, менять только если MAX попросит перейти на другой
 DOMAIN=bot.example.com       # ваш домен
 WEBHOOK_PATH=/webhook
 MINIAPP_PATH=/miniapp

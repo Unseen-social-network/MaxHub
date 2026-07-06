@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     )
 
     bot_token: str
+    max_api_url: str = "https://platform-api2.max.ru"
     domain: str
     webhook_path: str
     miniapp_path: str = "/miniapp"

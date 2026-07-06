@@ -33,6 +33,7 @@ def test_settings_defaults(monkeypatch):
     assert settings.broadcast_active_days == 30
     assert settings.app_version == "dev"
     assert settings.miniapp_path == "/miniapp"
+    assert settings.max_api_url == "https://platform-api2.max.ru"
 
 
 def test_settings_rejects_invalid_mode(monkeypatch):

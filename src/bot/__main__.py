@@ -31,7 +31,10 @@ BOT_DESCRIPTION = (
 
 
 def build_bot() -> Bot:
-    return Bot(token=get_settings().bot_token)
+    settings = get_settings()
+    bot = Bot(token=settings.bot_token)
+    bot.set_api_url(settings.max_api_url)
+    return bot
 
 
 def build_dispatcher(bot: Bot) -> tuple[Dispatcher, RateLimitedBot]:

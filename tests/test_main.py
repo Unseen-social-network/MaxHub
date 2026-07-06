@@ -1,10 +1,31 @@
 from fastapi.testclient import TestClient
 
-from bot.__main__ import create_app
+from bot.__main__ import build_bot, create_app
 
 
 async def _noop_check_me(self) -> None:
     return None
+
+
+def test_build_bot_uses_configured_api_url(monkeypatch):
+    monkeypatch.setenv("BOT_TOKEN", "test-token")
+    monkeypatch.setenv("MAX_API_URL", "https://platform-api.max.ru")
+    monkeypatch.setenv("DOMAIN", "example.com")
+    monkeypatch.setenv("WEBHOOK_PATH", "/webhook")
+    monkeypatch.setenv("PORT", "8080")
+    monkeypatch.setenv("MODE", "webhook")
+    monkeypatch.setenv("ADMIN_IDS", "1")
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://maxhub:maxhub@localhost:5432/maxhub"
+    )
+
+    from bot.config import get_settings
+
+    get_settings.cache_clear()
+
+    bot = build_bot()
+
+    assert bot.api_url == "https://platform-api.max.ru"
 
 
 def test_healthz_returns_ok(monkeypatch):
