@@ -2,6 +2,7 @@ from maxapi import Router
 from maxapi.context.base import BaseContext
 from maxapi.context.state_machine import State, StatesGroup
 from maxapi.filters.command import Command
+from maxapi.filters.filter import BaseFilter
 from maxapi.filters.state import StateFilter
 from maxapi.types.attachments.buttons import CallbackButton, ClipboardButton
 from maxapi.types.attachments.buttons.attachment_button import AttachmentButton
@@ -14,6 +15,14 @@ from bot.db.repositories.todos import TodoRepo
 from bot.services.rate_limit import RateLimitedBot
 
 todo_router = Router("todo")
+
+
+class IsTodoCallback(BaseFilter):
+    async def __call__(self, event: object) -> bool:
+        if not isinstance(event, MessageCallback):
+            return False
+        payload = event.callback.payload or ""
+        return payload.split(":")[0] == "todo"
 
 
 class TodoStates(StatesGroup):
@@ -198,7 +207,7 @@ async def handle_todo_fsm_choice(
         )
 
 
-@todo_router.message_callback()
+@todo_router.message_callback(IsTodoCallback())
 async def handle_todo_callback(
     event: MessageCallback,
     session: AsyncSession,

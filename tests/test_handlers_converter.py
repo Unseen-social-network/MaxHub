@@ -10,7 +10,11 @@ from maxapi.types.updates.message_created import MessageCreated
 from maxapi.types.users import User as MaxUser
 
 import bot.handlers.converter as converter_module
-from bot.handlers.converter import handle_conversion_callback, handle_image_message
+from bot.handlers.converter import (
+    IsConversionCallback,
+    handle_conversion_callback,
+    handle_image_message,
+)
 from bot.services.converter import MAX_INPUT_SIZE_BYTES
 
 
@@ -114,3 +118,11 @@ async def test_conversion_callback_converts_and_sends_file():
     assert "upload_media" in method_names
     assert "send_callback" in method_names
     assert "m3" not in converter_module._pending_conversions
+
+
+async def test_is_conversion_callback_rejects_other_routers_payloads():
+    is_conversion = IsConversionCallback()
+
+    assert await is_conversion(_make_callback_event(100, "conv:png:m1")) is True
+    assert await is_conversion(_make_callback_event(100, "todo:done:1")) is False
+    assert await is_conversion(_make_callback_event(100, "todo_fsm:list")) is False

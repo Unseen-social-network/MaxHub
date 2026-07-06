@@ -8,6 +8,7 @@ from maxapi.types.users import User as MaxUser
 
 from bot.db.repositories.todos import TodoRepo
 from bot.handlers.todo import (
+    IsTodoCallback,
     TodoStates,
     handle_todo,
     handle_todo_callback,
@@ -231,3 +232,11 @@ async def test_fsm_done_number_marks_item_and_clears_state(session):
     assert await context.get_state() is None
     todos = await TodoRepo(session).list_for_chat(100)
     assert todos[0].is_done is True
+
+
+async def test_is_todo_callback_rejects_other_routers_payloads():
+    is_todo = IsTodoCallback()
+
+    assert await is_todo(_make_callback_event(100, "todo:done:1")) is True
+    assert await is_todo(_make_callback_event(100, "conv:png:m1")) is False
+    assert await is_todo(_make_callback_event(100, "todo_fsm:list")) is False

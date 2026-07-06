@@ -31,6 +31,14 @@ class HasImageAttachment(BaseFilter):
         return any(isinstance(a, Image) for a in body.attachments)
 
 
+class IsConversionCallback(BaseFilter):
+    async def __call__(self, event: object) -> bool:
+        if not isinstance(event, MessageCallback):
+            return False
+        payload = event.callback.payload or ""
+        return payload.split(":")[0] == "conv"
+
+
 async def _download_image_bytes(event: MessageCreated) -> bytes:
     image = next(a for a in event.message.body.attachments if isinstance(a, Image))
     bot = event._ensure_bot()  # noqa: SLF001
@@ -67,7 +75,7 @@ async def handle_image_message(event: MessageCreated, limiter: RateLimitedBot) -
     )
 
 
-@converter_router.message_callback()
+@converter_router.message_callback(IsConversionCallback())
 async def handle_conversion_callback(
     event: MessageCallback, limiter: RateLimitedBot
 ) -> None:
