@@ -1,7 +1,24 @@
-.PHONY: help install run lint format test migrate migration up-local down-local logs-local up-prod down-prod
+# Единая точка входа для операций проекта.
+# Зависимости ставятся только через uv — не pip и не poetry.
 
-help: ## Показать список команд
-	@grep -E '^[a-zA-Z_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+.DEFAULT_GOAL := help
+COMPOSE ?= docker compose
+
+DC_LOCAL      := $(COMPOSE) --env-file .env -f docker/docker-compose.local.yml
+DC_PROD_CADDY := $(COMPOSE) --env-file .env -f docker/docker-compose.prod.caddyfile.yml
+DC_PROD_NGINX := $(COMPOSE) --env-file .env -f docker/docker-compose.prod.nginx.yml
+
+.PHONY: help install run lint format test check \
+        migrate migration \
+        up-local down-local logs \
+        up-prod-caddy down-prod-caddy up-prod-nginx down-prod-nginx \
+        clean
+
+help: ## Показать список целей
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) \
+	  | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# --- Разработка ---------------------------------------------------------------
 
 install: ## Установить зависимости
 	uv sync
@@ -18,23 +35,48 @@ format: ## Отформатировать код
 test: ## Прогнать тесты (нужен запущенный postgres)
 	uv run pytest
 
+check: lint test ## Полная проверка перед коммитом
+
+# --- База данных ----------------------------------------------------------------
+
 migrate: ## Применить миграции БД
 	uv run alembic upgrade head
 
-migration: ## Сгенерировать новую миграцию (make migration m="описание")
+migration: ## Сгенерировать новую миграцию: make migration m="описание"
+	@test -n "$(m)" || { echo "Укажите описание: make migration m=\"добавил users\""; exit 1; }
 	uv run alembic revision --autogenerate -m "$(m)"
 
+# --- Docker -----------------------------------------------------------------------
+# --env-file .env обязателен: без него Compose ищет .env рядом с самим
+# compose-файлом (в docker/), и подстановка ${PORT} в ports: молча берёт
+# дефолт.
+#
+# Прод-стек существует в двух вариантах фронта — за Caddy и за Nginx,
+# поэтому у него два независимых набора целей вместо одного up-prod/down-prod.
+
 up-local: ## Поднять бота и postgres локально в docker
-	docker compose -f docker/docker-compose.local.yml up -d --build
+	$(DC_LOCAL) up -d --build
 
 down-local: ## Остановить локальный docker-стек
-	docker compose -f docker/docker-compose.local.yml down
+	$(DC_LOCAL) down
 
-logs-local: ## Логи локального docker-стека
-	docker compose -f docker/docker-compose.local.yml logs -f bot
+logs: ## Логи локального стека (follow)
+	$(DC_LOCAL) logs -f bot
 
-up-prod: ## Поднять прод-стек (bot, postgres, caddy)
-	docker compose -f docker/docker-compose.prod.yml up -d
+up-prod-caddy: ## Поднять прод-стек за Caddy
+	$(DC_PROD_CADDY) up -d
 
-down-prod: ## Остановить прод-стек
-	docker compose -f docker/docker-compose.prod.yml down
+down-prod-caddy: ## Остановить прод-стек за Caddy
+	$(DC_PROD_CADDY) down
+
+up-prod-nginx: ## Поднять прод-стек за Nginx
+	$(DC_PROD_NGINX) up -d
+
+down-prod-nginx: ## Остановить прод-стек за Nginx
+	$(DC_PROD_NGINX) down
+
+# --- Прочее -------------------------------------------------------------------------
+
+clean: ## Удалить кэши и временные артефакты
+	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
